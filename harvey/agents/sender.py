@@ -430,7 +430,7 @@ class Sender:
             return
 
         max_daily = self.config.channels.email.max_daily_sends
-        sent_today = await self.state.count_outbox_sent_today()
+        sent_today = await self.state.count_outbox_sent_today(channel="email")
         budget = min(MAX_SENDS_PER_CYCLE, max_daily - sent_today)
         if budget <= 0:
             logger.info(f"Sender: daily send cap reached ({sent_today}/{max_daily}).")
@@ -438,7 +438,7 @@ class Sender:
 
         now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         due = await self.state.get_outbox(
-            status="approved", due_before=now, limit=budget * 3
+            status="approved", due_before=now, limit=budget * 3, channel="email",
         )
         if self.precleared is not None:
             # Cold emails held by an unavailable compliance check stay
@@ -448,7 +448,7 @@ class Sender:
             seen = {item["id"] for item in due}
             unchecked = await self.state.get_outbox(
                 status="approved", due_before=now, limit=budget * 3,
-                exclude_kind="sequence",
+                exclude_kind="sequence", channel="email",
             )
             extra = [item for item in unchecked if item["id"] not in seen]
             if extra:

@@ -22,7 +22,10 @@ already learned.
 
 import asyncio
 import base64
+import csv
+import io
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
@@ -496,6 +499,29 @@ class OpenStreetMap(DiscoveryProvider):
         "attorney": ['office=lawyer'],
         "contractor": ['craft=builder', 'office=construction_company'],
         "landscap": ['craft=gardener', 'shop=garden_centre'],
+        "roupa": ['shop=clothes', 'shop=fashion'],
+        "clothe": ['shop=clothes', 'shop=fashion'],
+        "vestuario": ['shop=clothes', 'shop=fashion'],
+        "calcado": ['shop=shoes'],
+        "sapato": ['shop=shoes'],
+        "shoe": ['shop=shoes'],
+        "acessorio": ['shop=jewelry', 'shop=fashion_accessories'],
+        "joia": ['shop=jewelry'],
+        "beleza": ['shop=hairdresser', 'shop=beauty', 'amenity=beauty_salon'],
+        "cosmetico": ['shop=chemist', 'shop=cosmetics', 'shop=perfumery'],
+        "cabelo": ['shop=hairdresser'],
+        "alimento": ['amenity=restaurant', 'amenity=fast_food', 'shop=bakery'],
+        "restaurante": ['amenity=restaurant'],
+        "confeitaria": ['shop=confectionery', 'shop=pastry', 'shop=bakery'],
+        "padaria": ['shop=bakery'],
+        "otica": ['shop=optician'],
+        "loja": ['shop=clothes', 'shop=shoes', 'shop=boutique', 'shop=gift'],
+        "comercio": ['shop=clothes', 'shop=shoes', 'shop=boutique', 'shop=gift'],
+        "retail": ['shop=clothes', 'shop=shoes', 'shop=boutique', 'shop=convenience'],
+        "fashion": ['shop=clothes', 'shop=fashion', 'shop=boutique'],
+        "boutique": ['shop=boutique', 'shop=clothes'],
+        "commerce": ['shop=clothes', 'shop=shoes', 'shop=boutique'],
+        "e-commerce": ['shop=clothes', 'shop=boutique'],
     }
 
     def _tags(self, term: str) -> list[str]:
@@ -588,9 +614,142 @@ class OpenStreetMap(DiscoveryProvider):
         return out
 
 
+class GoogleMapsScraper(DiscoveryProvider):
+    """Google Maps through a self-hosted gosom/google-maps-scraper.
+
+    Free, and the only source here that sees what Google Maps itself shows:
+    every shop, salon and restaurant with a phone, rating and review count,
+    including the small businesses that OpenStreetMap barely maps. Harvey
+    drives the scraper's REST API: create a job, wait for it, read the CSV.
+    """
+
+    key = "gmaps_scraper"
+    label = "Google Maps (self-hosted scraper)"
+    kind = "listings"
+    blurb = ("Scrapes Google Maps with gosom/google-maps-scraper running on "
+             "your machine: name, phone, website, rating and review count for "
+             "every business a search shows. Best source for local retail "
+             "when you message by WhatsApp.")
+    cost_note = "Free — runs on your own machine"
+    free_tier = "unlimited"
+    signup_url = "https://github.com/gosom/google-maps-scraper"
+    env_keys = ("gmaps_scraper_url",)
+    caveat = ("Needs the scraper service running (docker compose up gmaps-scraper). "
+              "A job takes several minutes, and Google may block heavy use "
+              "without proxies. Scraping Google Maps is against Google's terms.")
+
+    POLL_SECONDS = 5
+    JOB_TIMEOUT_SECONDS = 1500
+    RESULTS_PER_DEPTH = 20           # rough yield of one "depth" of scrolling
+
+    # A "website" that is really a social profile, link-in-bio page, chat
+    # link or marketplace listing is not the business's own site — and for
+    # anyone selling websites, those businesses are the best prospects.
+    NOT_OWN_SITE = re.compile(
+        r"(^|\.)(instagram|facebook|fb|tiktok|youtube|youtu|linktr|linktree|"
+        r"beacons|bio|taplink|wa|whatsapp|ifood|mercadolivre|shopee|olx|"
+        r"canva|google)\.", re.I)
+
+    async def fetch(self, client, env, query):
+        base = (env.get("gmaps_scraper_url") or "").rstrip("/")
+        depth = max(1, min(20, math.ceil(query.limit / self.RESULTS_PER_DEPTH)))
+        body = {
+            "name": f"harvey: {query.keyword()}"[:120],
+            "keywords": [query.keyword()],
+            "lang": (env.get("gmaps_scraper_lang") or "pt")[:2],
+            "zoom": 15,
+            "depth": depth,
+            "max_time": max(300, depth * 60),
+        }
+        if query.coordinate:
+            try:
+                lat, lng, radius_km = query.coordinate.split(",")
+                body.update(lat=lat.strip(), lon=lng.strip(),
+                            radius=int(float(radius_km) * 1000))
+            except ValueError:
+                logger.warning("discover: ignoring malformed coordinate %r",
+                               query.coordinate)
+
+        r = await client.post(f"{base}/api/v1/jobs", json=body)
+        r.raise_for_status()
+        job_id = r.json().get("id") or r.json().get("ID")
+        if not job_id:
+            raise RuntimeError("the scraper did not return a job id")
+        try:
+            await self._wait(client, base, job_id)
+            csv_response = await client.get(f"{base}/api/v1/jobs/{job_id}/download")
+            csv_response.raise_for_status()
+            return self._parse(csv_response.text, query)[:query.limit]
+        finally:
+            try:   # leave the scraper's job list as we found it
+                await client.delete(f"{base}/api/v1/jobs/{job_id}")
+            except httpx.HTTPError:
+                pass
+
+    async def _wait(self, client, base: str, job_id: str):
+        waited = 0
+        while waited <= self.JOB_TIMEOUT_SECONDS:
+            r = await client.get(f"{base}/api/v1/jobs/{job_id}")
+            r.raise_for_status()
+            job = {str(k).lower(): v for k, v in (r.json() or {}).items()}
+            status = str(job.get("status") or "").lower()
+            if status == "ok":
+                return
+            if status in ("failed", "error"):
+                raise RuntimeError(f"the scraper job {job_id} failed")
+            await asyncio.sleep(self.POLL_SECONDS)
+            waited += self.POLL_SECONDS
+        raise RuntimeError(f"the scraper job {job_id} did not finish in "
+                           f"{self.JOB_TIMEOUT_SECONDS // 60} minutes")
+
+    def _parse(self, text: str, query: DiscoveryQuery) -> list[Business]:
+        out: list[Business] = []
+        for row in csv.DictReader(io.StringIO(text)):
+            name = (row.get("title") or "").strip()
+            if not name:
+                continue
+            site = (row.get("website") or "").strip()
+            domain = normalize_domain(site)
+            if domain and self.NOT_OWN_SITE.search(domain + "."):
+                site, domain = "", ""
+            stable = (row.get("place_id") or row.get("cid")
+                      or row.get("data_id") or row.get("link") or name)
+            out.append(Business(
+                name=name,
+                domain=domain,
+                website=site if domain else "",
+                phone=(row.get("phone") or "").strip(),
+                address=(row.get("address") or "").strip(),
+                location=query.location,
+                category=(row.get("category") or "").strip(),
+                rating=_to_float(row.get("review_rating")),
+                review_count=_to_int(row.get("review_count")),
+                has_website=bool(domain),
+                external_id=f"gmaps:{stable}",
+                source_url=(row.get("link") or "").strip(),
+                provider=self.key,
+            ))
+        return out
+
+
+def _to_float(value) -> float | None:
+    try:
+        return float(str(value).replace(",", ".")) if str(value).strip() else None
+    except ValueError:
+        return None
+
+
+def _to_int(value) -> int | None:
+    try:
+        return int(float(str(value))) if str(value).strip() else None
+    except ValueError:
+        return None
+
+
 PROVIDERS: dict[str, DiscoveryProvider] = {
     p.key: p for p in (
         OpenStreetMap(),
+        GoogleMapsScraper(),
         DataForSEOListings(),
         DataForSEOSerp(),
         Serper(),

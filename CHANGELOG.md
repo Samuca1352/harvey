@@ -9,6 +9,22 @@ minor versions can still change behaviour.
 
 ### Added
 
+- **WhatsApp channel (WA-AKG).** Set `channels.whatsapp.enabled: true` to
+  message businesses on WhatsApp through a self-hosted
+  [WA-AKG](https://github.com/mrifqidaffaaditya/WA-AKG) gateway
+  (`WA_AKG_URL`, `WA_AKG_API_KEY`, `WA_AKG_SESSION_ID`; check with
+  `harvey whatsapp test [number]`). Businesses with a mobile number become
+  prospects, get one grounded first message in Portuguese (`prompts/whatsapp.md`),
+  and wait in the same Outbox approval ladder as email. Sends respect a low
+  daily cap, random gaps, a "has WhatsApp?" check, the deterministic gate and
+  stop-on-reply; every cold message ends with an opt-out line, and replies
+  like SAIR / "não quero" suppress the number. Replies are polled, not pushed
+  (WA-AKG only calls public HTTPS webhooks). Outbox rows gained a `channel`.
+- **Google Maps discovery.** `harvey discover --provider gmaps_scraper` drives a
+  self-hosted [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper)
+  (`docker compose up -d gmaps-scraper`, `GMAPS_SCRAPER_URL`). Free; returns
+  phone, rating and reviews, and treats an Instagram/Linktree "website" as no
+  website.
 - **Microsoft 365 mail provider.** Set `channels.email.provider: microsoft` to
   send and read through a Microsoft 365 / Outlook mailbox via Microsoft Graph,
   for domains whose mail lives in Exchange Online (which no longer accepts

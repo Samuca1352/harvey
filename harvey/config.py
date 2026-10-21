@@ -61,6 +61,15 @@ class ICPConfig(BaseModel):
     # hiring a "Head of Growth" is buying growth tooling). Empty → falls back
     # to `titles`. Used for careers-page scanning and job-board discovery.
     hiring_signals: list[str] = []
+    # Business types to leave alone. A word matching a discovered business's
+    # category or name (case-insensitive, accents ignored) keeps it from being
+    # messaged on WhatsApp: "restaurante" skips every restaurant.
+    exclude_industries: list[str] = []
+    # The opposite filter, and the stricter one: when set, a business is only
+    # messaged if its category or name contains one of these words. This is what
+    # keeps a broad search ("loja") from filling the queue with phone shops,
+    # pet shops and cafés. Empty = no filter.
+    include_keywords: list[str] = []
     # Discovery needs a radius, not a place name. Maps each entry in
     # `geography` to "lat,lng,radius_km" — e.g.
     #   "Denver, CO": "39.7392,-104.9903,50"
@@ -101,9 +110,115 @@ class LinkedInChannelConfig(BaseModel):
     max_daily_messages: int = 10
 
 
+DEFAULT_WHATSAPP_OPT_OUTS = [
+    "Se não fizer sentido pra você, é só me avisar que eu não te chamo mais.",
+    "Se preferir que eu não te chame, é só falar.",
+    "Quando não quiser mais receber mensagem minha, me avisa que eu paro.",
+    "E se não for o momento, sem problema: me avisa e eu paro por aqui.",
+    "Se não tiver interesse, pode me falar que eu não insisto.",
+]
+
+
+class WhatsAppChannelConfig(BaseModel):
+    """WhatsApp outreach through a self-hosted WA-AKG gateway.
+
+    Off by default. Connection details live in .env (WA_AKG_URL,
+    WA_AKG_API_KEY, WA_AKG_SESSION_ID). Cold WhatsApp is the easiest way to
+    lose a number, so the defaults are deliberately slow: a low daily cap,
+    one message per business, human-ish gaps, approval on.
+    """
+
+    enabled: bool = False
+    # Cold first messages per day. Replies to people who wrote back are not
+    # counted against this.
+    max_daily_sends: int = 25
+    # Warm the number up toward max_daily_sends instead of jumping to it: the
+    # cap on day N after the first cold message is ramp_start_sends + N *
+    # ramp_step_sends, never above max_daily_sends. 0 = no ramp.
+    ramp_start_sends: int = 0
+    ramp_step_sends: int = 5
+    # Same copilot ladder as email: nothing leaves until you approve it
+    # (dashboard → Outbox, or `harvey outbox`). Set false once you trust it.
+    require_approval: bool = True
+    # Prepended to numbers that carry no country code (Google Maps shows
+    # "(11) 91234-5678"). 55 = Brazil.
+    default_country_code: str = "55"
+    # How the assistant introduces itself on WhatsApp. Empty = persona.name.
+    persona_name: str = ""
+    # Closing line of every cold first message, one picked at random so the
+    # messages don't all end the same way. Replies like "não quero" or "pare"
+    # are understood either way; empty list = no closing line.
+    opt_out_lines: list[str] = DEFAULT_WHATSAPP_OPT_OUTS
+    # Legacy single line, used only when opt_out_lines is empty.
+    opt_out_line: str = ""
+    # Split first messages between two openers (A: the original pitch, B: a
+    # short question about their shop) and compare reply rates with
+    # `harvey whatsapp stats`. False = always A.
+    opener_test: bool = True
+    # Seconds to wait between two sends, picked at random in this range.
+    min_gap_seconds: int = 30
+    max_gap_seconds: int = 90
+    # How long after our message a reply is still looked for.
+    reply_window_days: int = 14
+    # Nudges to someone who replied and then went quiet, in hours after our
+    # last message: [24, 72] = one a day later, another three days after that,
+    # then an alert to the owner. People who never replied are never nudged
+    # (one touch only). Empty = off.
+    followup_delays_hours: list[int] = [24, 72]
+    # Your own number. When a customer is ready for a meeting (or needs a
+    # human), Harvey sends a summary here. Empty disables the alerts.
+    notify_phone: str = ""
+
+    # A WhatsApp group (its JID, "...@g.us") that gets the same alerts, so more
+    # than one person sees them. Takes precedence over notify_phone.
+    notify_group: str = ""
+
+    @field_validator("notify_group", mode="before")
+    @classmethod
+    def _group_jid(cls, v) -> str:
+        v = str(v or "").strip()
+        if v and not v.endswith("@g.us"):
+            raise ValueError("notify_group must be a group JID ending in @g.us")
+        return v
+
+    @field_validator("notify_phone", mode="before")
+    @classmethod
+    def _notify_digits(cls, v) -> str:
+        return re.sub(r"\D", "", str(v or ""))
+
+    @field_validator("max_daily_sends")
+    @classmethod
+    def _sends_non_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("max_daily_sends must be >= 0")
+        return v
+
+    @field_validator("default_country_code", mode="before")
+    @classmethod
+    def _digits_only(cls, v) -> str:
+        v = re.sub(r"\D", "", str(v or ""))
+        if not v:
+            raise ValueError("default_country_code must be digits, e.g. 55")
+        return v
+
+    @model_validator(mode="after")
+    def _gap_order(self):
+        if self.min_gap_seconds < 0 or self.max_gap_seconds < self.min_gap_seconds:
+            raise ValueError(
+                "whatsapp gaps must satisfy 0 <= min_gap_seconds <= max_gap_seconds"
+            )
+        return self
+
+
+def whatsapp_persona_name(config) -> str:
+    """The name the assistant uses on WhatsApp."""
+    return (config.channels.whatsapp.persona_name or config.persona.name).strip()
+
+
 class ChannelsConfig(BaseModel):
     email: EmailChannelConfig = EmailChannelConfig()
     linkedin: LinkedInChannelConfig = LinkedInChannelConfig()
+    whatsapp: WhatsAppChannelConfig = WhatsAppChannelConfig()
 
 
 PRECLEARED_ADDRESS_SOURCES = ("published", "bought", "scraped", "given", "unknown")
@@ -257,6 +372,26 @@ class BrainConfig(BaseModel):
         return v
 
 
+class DiscoveryConfig(BaseModel):
+    """The night shift: finding businesses while nothing may be sent.
+
+    During quiet hours Harvey searches Google Maps city by city, turns what it
+    finds into prospects and drafts their first messages, so the morning starts
+    with a full queue. Nothing is SENT at night; sending still waits for the
+    end of quiet hours.
+    """
+
+    night_shift: bool = False
+    provider: str = "gmaps_scraper"
+    # Cities to search, e.g. ["Votuporanga, SP", "Fernandópolis, SP"]. Empty
+    # falls back to icp.geography.
+    cities: list[str] = []
+    # Stop finding and drafting once this many first messages are waiting.
+    queue_target: int = 60
+    # Results asked of each search (one search = one industry in one city).
+    results_per_search: int = 100
+
+
 class HarveyConfig(BaseModel):
     persona: PersonaConfig
     product: ProductConfig
@@ -265,6 +400,7 @@ class HarveyConfig(BaseModel):
     usage: UsageConfig = UsageConfig()
     brain: BrainConfig = BrainConfig()
     compliance: ComplianceConfig = ComplianceConfig()
+    discovery: DiscoveryConfig = DiscoveryConfig()
 
 
 class EnvConfig(BaseModel):
@@ -295,6 +431,13 @@ class EnvConfig(BaseModel):
     m365_tenant_id: str = ""
     # Optional: only used when compliance.precleared.enabled is true.
     precleared_api_key: str = ""
+    # WhatsApp gateway (channels.whatsapp.enabled) — a self-hosted WA-AKG.
+    wa_akg_url: str = ""
+    wa_akg_api_key: str = ""
+    wa_akg_session_id: str = ""
+    # Self-hosted gosom/google-maps-scraper (discover --provider gmaps_scraper)
+    gmaps_scraper_url: str = ""
+    gmaps_scraper_lang: str = "pt"
 
 
 def _format_validation_error(e: ValidationError) -> str:
@@ -408,6 +551,11 @@ def load_env() -> EnvConfig:
         m365_client_id=os.getenv("M365_CLIENT_ID", "").strip(),
         m365_tenant_id=os.getenv("M365_TENANT_ID", "").strip(),
         precleared_api_key=os.getenv("PRECLEARED_API_KEY", "").strip(),
+        wa_akg_url=os.getenv("WA_AKG_URL", "").strip().rstrip("/"),
+        wa_akg_api_key=os.getenv("WA_AKG_API_KEY", "").strip(),
+        wa_akg_session_id=os.getenv("WA_AKG_SESSION_ID", "").strip(),
+        gmaps_scraper_url=os.getenv("GMAPS_SCRAPER_URL", "").strip().rstrip("/"),
+        gmaps_scraper_lang=os.getenv("GMAPS_SCRAPER_LANG", "pt").strip() or "pt",
     )
     return env
 

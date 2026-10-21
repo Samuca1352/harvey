@@ -392,6 +392,53 @@ def cmd_gmail(args):
         asyncio.run(_test())
 
 
+def cmd_whatsapp(args):
+    """WhatsApp (WA-AKG) utilities: test the gateway, or check one number."""
+    from harvey.config import load_config, load_env
+    from harvey.integrations.whatsapp import WhatsAppClient, normalize_phone
+
+    env = load_env()
+    client = WhatsAppClient(env)
+
+    if args.whatsapp_action == "stats":
+        from harvey.agents.whatsapp import variant_stats
+        from harvey.state import StateManager
+
+        async def _stats():
+            state = StateManager()
+            await state.init_db()
+            rows = await variant_stats(state)
+            print("\n  Abertura A (original) x B (pergunta curta)")
+            if not rows:
+                print("  Ainda sem envios com variante registrada.\n")
+            for r in rows:
+                print(f"  {r['variant']}: {r['sent']} enviadas, {r['replied']} responderam ({r['rate']:.0%})")
+            print("  (compare só com 40+ envios por variante; antes disso é ruído)\n")
+        asyncio.run(_stats())
+        return
+
+    async def _run():
+        ok, detail = await client.test_connection()
+        print(f"\n  {'✓' if ok else '✗'} {detail}")
+        if ok and args.number:
+            try:
+                cc = load_config().channels.whatsapp.default_country_code
+            except Exception:
+                cc = "55"
+            phone = normalize_phone(args.number, cc)
+            if not phone:
+                print(f"  ✗ '{args.number}' is not a usable phone number")
+                ok = False
+            else:
+                exists = await client.exists(phone)
+                label = {True: "has WhatsApp", False: "has no WhatsApp", None: "could not be checked"}[exists]
+                print(f"  {'✓' if exists else '✗'} {phone} {label}")
+        print()
+        sys.exit(0 if ok else 1)
+
+    asyncio.run(_run())
+
+
 def cmd_microsoft(args):
     """Microsoft 365 provider utilities (auth / test)."""
     from harvey.config import load_env
@@ -732,6 +779,14 @@ def main():
     sub.add_argument("gmail_action", choices=["auth", "test"],
                      help="auth: one-time OAuth; test: verify connection")
     sub.set_defaults(func=cmd_gmail)
+
+    # harvey whatsapp test [number]
+    sub = subparsers.add_parser("whatsapp", help="WhatsApp (WA-AKG) gateway check")
+    sub.add_argument("whatsapp_action", choices=["test", "stats"],
+                     help="test: verify the gateway; stats: reply rate per opener variant")
+    sub.add_argument("number", nargs="?", default="",
+                     help="optional: also check whether this number has WhatsApp")
+    sub.set_defaults(func=cmd_whatsapp)
 
     # harvey microsoft auth|test
     sub = subparsers.add_parser("microsoft", help="Microsoft 365 provider setup")

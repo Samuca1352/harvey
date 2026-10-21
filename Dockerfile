@@ -35,7 +35,7 @@ ENV PATH="/home/harvey/.local/bin:${PATH}"
 
 # Claude Code CLI, installed as the runtime user so ~/.local/bin is correct.
 # `|| true` keeps the build working offline; the CLI is required at runtime.
-RUN curl -fsSL https://claude.ai/install.sh | sh || true
+RUN curl -fsSL https://claude.ai/install.sh | bash || true
 
 # Healthy = the heartbeat loop has touched the database recently
 # (2h window tolerates long heartbeat intervals and quiet-hour idling).

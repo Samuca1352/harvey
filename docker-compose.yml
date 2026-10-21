@@ -10,9 +10,20 @@ services:
       - ./prompts:/app/prompts:ro
       - ./skills:/app/skills
       # Mount Claude auth (required for Max plan usage).
-      # Not read-only: the CLI refreshes OAuth tokens in place.
-      # The container runs as non-root user "harvey" (uid 1000).
       - ~/.claude:/home/harvey/.claude
+      - ./.env:/app/.env:ro
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./.venv:/app/.venv:ro
+    ports:
+      - "5555:5555"
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
+    environment:
+      # Reached over the compose network (see the gmaps-scraper service).
+      GMAPS_SCRAPER_URL: http://gmaps-scraper:8080
+    extra_hosts:
+      # Lets WA_AKG_URL=http://host.docker.internal:3000 reach a WA-AKG
+      # gateway running on the host (needed on Linux).
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     init: true
     logging:
@@ -20,3 +31,21 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Google Maps discovery for `harvey discover --provider gmaps_scraper`.
+  # Start on demand: docker compose up -d gmaps-scraper
+  gmaps-scraper:
+    image: gosom/google-maps-scraper:v1.18.1
+    command: ["-data-folder", "/gmapsdata"]
+    environment:
+      DISABLE_TELEMETRY: "1"
+    volumes:
+      - ./data/gmaps:/gmapsdata
+      - gmaps-playwright-cache:/opt
+    ports:
+      # Loopback only: the scraper has no authentication.
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+volumes:
+  gmaps-playwright-cache:

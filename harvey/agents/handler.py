@@ -7,13 +7,18 @@ threshold — flips the global kill switch so a bad list can't torch the
 sending domain while nobody's watching.
 """
 
+import asyncio
 import logging
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 
 from harvey.brain import Brain, BrainUnavailable
 from harvey.config import HarveyConfig, EnvConfig
 from harvey.integrations.instantly import InstantlyClient
 from harvey.integrations.mail_provider import NATIVE_PROVIDERS, get_mail_provider
+from harvey.config import whatsapp_persona_name
+from harvey.gate import BANNED_PHRASES, WHATSAPP_BANNED_PHRASES, pre_send_check_whatsapp
+from harvey.integrations.whatsapp import WhatsAppClient
 from harvey.models.conversation import Conversation, Message
 from harvey.state import StateManager
 
@@ -23,6 +28,24 @@ KILL_SWITCH_KEY = "sending_paused"
 BOUNCE_COUNT_KEY = "bounce_count"
 # Kill switch only engages after this many sends (a tiny sample lies).
 MIN_SENDS_FOR_KILL_SWITCH = 10
+# Extra drafts of a WhatsApp reply the send gate would block.
+WA_REPLY_REDRAFTS = 2
+# Prospect statuses that end nudging: the owner or the customer has the floor.
+NO_FOLLOWUP_STATUSES = {"opted_out", "lost", "meeting", "closed"}
+
+WA_FOLLOWUP = (
+    "RETOMADA: a pessoa parou de responder depois da sua última mensagem. Escreva uma mensagem "
+    "curta (até 35 palavras) que traga algo novo e útil ligado ao que ela contou da loja: um "
+    "recurso da vitrine ou um benefício que ainda não apareceu na conversa. Não cobre resposta, "
+    "não diga \"viu minha mensagem?\", \"só passando\" nem \"retomando\", não repita nada que já "
+    "disse. Sem pergunta, ou no máximo uma pergunta leve."
+)
+WA_FOLLOWUP_LAST = (
+    "ÚLTIMA RETOMADA: a pessoa está há alguns dias sem responder. Escreva uma mensagem curtíssima "
+    "(até 25 palavras) e leve que deixe a porta aberta: se um dia quiser testar, os 15 dias grátis "
+    "são sem cartão e ela cria a loja sozinha em 1 minuto. Se você já ofereceu o teste há pouco, deixe a porta aberta sem "
+    "repetir a oferta. Sem pergunta, sem pressão; não diga que é a última mensagem nem que ela sumiu."
+)
 
 INTENT_LABELS = {
     "interested",
@@ -77,6 +100,42 @@ ESCALATION_PATTERNS = (
     "blacklist",
 )
 
+# WhatsApp replies arrive in Portuguese. Matched on word boundaries so "pare"
+# stops a conversation but "parede" doesn't. A false opt-out only costs one
+# lead; a missed one costs a reported number.
+OPT_OUT_WORDS_PT = (
+    r"parar", r"pare", r"parem", r"stop", r"cancelar",
+    r"remover", r"remova", r"remove", r"descadastrar", r"descadastre",
+    r"n[aã]o quero", r"n[aã]o tenho interesse", r"n[aã]o me (envie|mande|chame|procure|incomode)",
+    r"n[aã]o envie", r"n[aã]o mande", r"chega de", r"me tire", r"tire meu",
+    r"excluir meu", r"apague meu", r"bloquear", r"bloqueei",
+)
+OPT_OUT_RE_PT = re.compile(r"\b(?:" + "|".join(OPT_OUT_WORDS_PT) + r")\b", re.IGNORECASE)
+
+# A customer whose focus is the art/design side: a designer should send the portfolio.
+ARTS_INTEREST_RE = re.compile(
+    r"\bartes?\b|portf[oó]lio|\bdesign(er)?s?\b|identidade visual|\bbanner\b|\blogo(tipo)?\b|\bposts?\b",
+    re.IGNORECASE,
+)
+
+# "SAIR" is the word our own opt-out line asks for, but "vou sair agora" is
+# not an opt-out: it only counts when it is nearly the whole message.
+SAIR_RE = re.compile(r"\bsair\b", re.IGNORECASE)
+
+
+def wants_opt_out_pt(text: str) -> bool:
+    return bool(OPT_OUT_RE_PT.search(text)) or (
+        len(text.split()) <= 4 and bool(SAIR_RE.search(text))
+    )
+
+
+ESCALATION_WORDS_PT = (
+    r"advogad[oa]", r"processo", r"procon", r"lgpd", r"den[uú]ncia", r"denunciar",
+    r"golpe", r"spam", r"pol[ií]cia", r"minist[eé]rio p[uú]blico", r"vou reportar",
+    r"reportei", r"justi[cç]a", r"indeniza[cç][aã]o",
+)
+ESCALATION_RE_PT = re.compile(r"\b(?:" + "|".join(ESCALATION_WORDS_PT) + r")\b", re.IGNORECASE)
+
 
 class Handler:
     def __init__(
@@ -91,6 +150,12 @@ class Handler:
         self.config = config
         self.instantly = InstantlyClient(env.instantly_api_key)
         self.provider = get_mail_provider(config, env)
+        wa_cfg = getattr(config.channels, "whatsapp", None)
+        self.wa_cfg = wa_cfg if wa_cfg is not None and wa_cfg.enabled else None
+        self.wa = WhatsAppClient(env) if self.wa_cfg else None
+        # The heartbeat and the fast WhatsApp watcher both read replies; one
+        # at a time, so a message is never answered twice.
+        self._wa_lock = asyncio.Lock()
         self.skills = ""
 
     @property
@@ -112,17 +177,28 @@ class Handler:
         # Load foundational skills for this agent
         self.skills = self.brain.load_skills_for_agent("handler")
 
+        ok = True
+        if self.wa_cfg:
+            ok = await self._run_whatsapp()
+            if ok:
+                try:
+                    await self._whatsapp_followups()
+                except BrainUnavailable as e:
+                    logger.error(f"Handler: follow-ups left for later ({e}).")
+                except Exception as e:
+                    logger.error(f"Handler: WhatsApp follow-ups failed: {e}")
+
         if not self.config.channels.email.enabled:
-            return True
+            return ok
 
         if self.is_native:
-            return await self._run_native()
+            return await self._run_native() and ok
 
         # 1. Fetch active campaigns
         active_campaigns = await self.state.get_campaigns_by_status("active")
         if not active_campaigns:
             logger.info("Handler: No active campaigns to monitor.")
-            return True
+            return ok
 
         total_handled = 0
         complete = True
@@ -159,7 +235,7 @@ class Handler:
             logger.info(f"Handler: Processed {total_handled} replies.")
         else:
             logger.info("Handler: No new replies.")
-        return complete
+        return complete and ok
 
     async def _handle_reply(self, reply: dict, campaign) -> bool:
         """Process a single reply. Returns True if a new reply was handled."""
@@ -200,17 +276,27 @@ class Handler:
         reply_uuid: str,
         campaign_id: str = "",
         reply_meta: dict | None = None,
+        prospect=None,
+        channel: str = "email",
+        force_intent: str = "",
     ):
-        """Classify, record, and respond to a single reply."""
-        # Find the prospect by email (indexed lookup)
-        prospect = await self.state.get_prospect_by_email(lead_email)
+        """Classify, record, and respond to a single reply.
+
+        ``lead_email`` is the prospect's identity for logs (an address, or a
+        phone number on WhatsApp). On WhatsApp the caller passes ``prospect``
+        directly, since there is no email to look it up by.
+        """
+        if prospect is None:
+            # Find the prospect by email (indexed lookup)
+            prospect = await self.state.get_prospect_by_email(lead_email)
         if not prospect:
             logger.warning(f"Handler: No prospect found for {lead_email}")
             return
 
         # Update prospect status + stop-on-reply: a human answered, so every
         # queued sequence email for them is now wrong to send.
-        await self.state.update_prospect_status(prospect.id, "replied")
+        if prospect.status != "meeting":
+            await self.state.update_prospect_status(prospect.id, "replied")
         try:
             cancelled = await self.state.cancel_pending_outbox_for_prospect(prospect.id)
             if cancelled:
@@ -224,10 +310,15 @@ class Handler:
         # 1. Classify intent. Hard keyword checks run FIRST and override
         # the LLM — opt-outs and legal threats must never be missed.
         text_lower = reply_text.lower()
-        if any(p in text_lower for p in OPT_OUT_PATTERNS):
+        pt = channel == "whatsapp"
+        if any(p in text_lower for p in OPT_OUT_PATTERNS) or (pt and wants_opt_out_pt(text_lower)):
             intent = "unsubscribe"
-        elif any(p in text_lower for p in ESCALATION_PATTERNS):
+        elif any(p in text_lower for p in ESCALATION_PATTERNS) or (
+            pt and ESCALATION_RE_PT.search(text_lower)
+        ):
             intent = "escalate"
+        elif force_intent:
+            intent = force_intent
         else:
             intent = await self._classify_intent(reply_text, prospect)
         logger.info(f"Handler: Intent for {lead_email}: {intent}")
@@ -249,7 +340,7 @@ class Handler:
                 id="",
                 prospect_id=prospect.id,
                 campaign_id=campaign_id,
-                channel="email",
+                channel=channel,
                 intent=intent,
                 status="open",
             )
@@ -261,7 +352,9 @@ class Handler:
         # 2b. Draft the reply now, while nothing is stored yet.
         response = ""
         if intent in AUTO_REPLY_INTENTS:
-            response = await self._generate_response(intent, reply_text, prospect, convo)
+            response = await self._generate_response(
+                intent, reply_text, prospect, convo, channel=channel
+            )
 
         # 2c. Store the conversation in one write.
         if stored is None:
@@ -275,6 +368,11 @@ class Handler:
             )
         if convo.stage != old_stage:
             logger.info(f"Handler: Stage for {lead_email}: {old_stage} -> {convo.stage}")
+        if channel == "whatsapp" and intent in ("interested", "question", "objection"):
+            if convo.stage == "closing":
+                await self._notify_owner("meeting", prospect, convo)
+            if ARTS_INTEREST_RE.search(reply_text):
+                await self._notify_owner("arts", prospect, convo)
 
         # 3. Route based on intent
         if intent == "unsubscribe":
@@ -303,6 +401,8 @@ class Handler:
             logger.warning(
                 f"Handler: ESCALATED reply from {lead_email} — needs human review. No auto-reply sent."
             )
+            if channel == "whatsapp":
+                await self._notify_owner("human", prospect, convo)
             return
 
         if intent == "not_interested":
@@ -334,11 +434,15 @@ class Handler:
                 f"Handler: Could not generate a response for {lead_email}. "
                 "Flagged for human review."
             )
+            if channel == "whatsapp":
+                await self._notify_owner("human", prospect, convo)
             return
 
         # Send the response — natively through the outbox approval ladder,
         # or immediately via Instantly (legacy).
-        if self.is_native:
+        if channel == "whatsapp":
+            await self._queue_whatsapp_reply(response, prospect, convo, intent)
+        elif self.is_native:
             await self._queue_native_reply(
                 response, prospect, convo, reply_meta or {}, intent
             )
@@ -420,6 +524,290 @@ class Handler:
             logger.info("Handler: no new replies.")
         return complete
 
+    # ── WhatsApp path (WA-AKG, polled) ──
+
+    async def _run_whatsapp(self, days: int | None = None) -> bool:
+        """Poll the gateway for answers from people we messaged.
+        Returns True only if every contact was read and every message handled."""
+        async with self._wa_lock:
+            return await self._run_whatsapp_locked(days)
+
+    async def _run_whatsapp_locked(self, days: int | None) -> bool:
+        if not self.wa.is_configured():
+            return True  # the agent can't send either; nothing to read
+        contacts = await self.state.get_recent_whatsapp_contacts(
+            days or self.wa_cfg.reply_window_days
+        )
+        if not contacts:
+            return True
+
+        handled = 0
+        complete = True
+        for contact in contacts:
+            try:
+                inbound = await self.wa.get_incoming(contact["phone"], since=contact["first_sent_at"])
+            except Exception as e:
+                logger.error(f"Handler: reading WhatsApp from {contact['phone']} failed: {e}")
+                complete = False
+                continue
+            fresh = [m for m in inbound if not await self.state.is_reply_processed(f"wa:{m.id}")]
+            if not fresh:
+                continue
+            prospect = await self.state.get_prospect(contact["prospect_id"])
+            if prospect is None:
+                continue
+
+            # Several messages in a row are one answer, not three.
+            text = "\n".join(m.body for m in fresh if m.body).strip()
+            media_only = not text
+            if media_only:
+                text = f"[mensagem de {fresh[-1].type.lower()}, sem texto]"
+            consumed = True
+            try:
+                await self._process_reply(
+                    contact["phone"], text, reply_uuid="", prospect=prospect,
+                    channel="whatsapp", force_intent="escalate" if media_only else "",
+                )
+                handled += 1
+            except BrainUnavailable as e:
+                consumed = False
+                complete = False
+                logger.error(f"Handler: stopping; replies are left for later ({e}).")
+                break
+            except Exception as e:
+                logger.error(f"Handler: error processing WhatsApp from {contact['phone']}: {e}")
+                complete = False
+            finally:
+                if consumed:
+                    for m in fresh:
+                        await self.state.mark_reply_processed(f"wa:{m.id}")
+
+        if handled:
+            logger.info(f"Handler: processed {handled} WhatsApp conversation(s).")
+        return complete
+
+    async def _whatsapp_followups(self):
+        """Nudge people who replied and then went quiet; never cold silence.
+
+        Runs from the heartbeat only, so never in quiet hours. Each nudge is
+        drafted when due and queued as kind='followup'; the sender drops it if
+        the customer wrote back first. After the last one, the owner is told.
+        """
+        delays = self.wa_cfg.followup_delays_hours
+        if not delays or not self.wa.is_configured():
+            return
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for convo in await self.state.get_conversations_by_status("open"):
+            if convo.channel != "whatsapp" or not convo.thread or convo.thread[-1].sender != "harvey":
+                continue
+            heard = [m.timestamp for m in convo.thread if m.sender == "prospect"]
+            if not heard:
+                continue
+            # Nudges since the customer last wrote, whatever became of them,
+            # so a failed one can't be redrafted every cycle.
+            since = heard[-1].isoformat()
+            done = [
+                i for i in await self.state.get_outbox_for_conversation(convo.id, "followup")
+                if (i["created_at"] or "").replace(" ", "T") > since
+            ]
+            if any(i["status"] in ("pending_review", "approved") for i in done):
+                continue
+            prospect = await self.state.get_prospect(convo.prospect_id)
+            if prospect is None or prospect.status in NO_FOLLOWUP_STATUSES:
+                continue
+            quiet = now - convo.thread[-1].timestamp
+            if len(done) >= len(delays):
+                if quiet >= timedelta(hours=delays[-1]):
+                    await self._notify_owner("cold", prospect, convo)
+                continue
+            if quiet < timedelta(hours=delays[len(done)]):
+                continue
+            body = await self._generate_whatsapp_response(
+                convo.intent, "", prospect, convo,
+                followup=WA_FOLLOWUP_LAST if len(done) + 1 == len(delays) else WA_FOLLOWUP,
+            )
+            if body:
+                await self._queue_whatsapp_reply(body, prospect, convo, "followup", kind="followup")
+
+    async def _generate_whatsapp_response(
+        self, intent: str, reply_text: str, prospect, convo: Conversation,
+        followup: str = "",
+    ) -> str:
+        """Draft a WhatsApp reply: explain first, steer to the free trial, and
+        never nag about "the team" (prompts/whatsapp_reply.md has the rules)."""
+        me = whatsapp_persona_name(self.config)
+        history = "\n".join(
+            f"{me if m.sender == 'harvey' else 'Cliente'}: {m.content}"
+            for m in convo.thread[-10:]
+        )
+        handoffs = sum(
+            1 for m in convo.thread
+            if m.sender == "harvey" and re.search(r"\b(equipe|time|alguém|alguem)\b", m.content, re.I)
+        )
+        harvey_turns = sum(1 for m in convo.thread if m.sender == "harvey")
+        pro_mentioned = any(
+            m.sender == "harvey" and re.search(r"\bpro\b|\bartes?\b", m.content, re.I)
+            for m in convo.thread
+        )
+        # The conversation has run for a while and the Pro plan hasn't come up:
+        # it's due now, once, tied to what the customer has said.
+        pro_instruction = (
+            "A conversa já andou e o Pro ainda não apareceu. Considere, com o seu julgamento: se a "
+            "pessoa está receptiva, descubra (com palavras suas, nunca decoradas) se manter o Instagram ou "
+            "os posts da loja toma o tempo dela: com uma pergunta, se a regra 1b deixar, ou com um "
+            "comentário que convida resposta, se não deixar. Se ela mostrar essa "
+            "dor, apresente o Pro. Se ela estiver gostando muito da vitrine, as artes entram como o "
+            "complemento que fecha o pacote. Se ela não mostrar interesse em artes, deixe para lá e "
+            "siga com o Básico e o teste. Não force."
+            if not pro_mentioned and harvey_turns >= 3 and intent in ("question", "interested")
+            else ""
+        )
+        harvey_msgs = [m for m in convo.thread if m.sender == "harvey"][-3:]
+        # Questions in a row read as an interrogation; the prompt forbids a third.
+        questions_recent = sum(1 for m in harvey_msgs[-2:] if "?" in m.content)
+        trial_recent = sum(
+            1 for m in harvey_msgs if re.search(r"\bteste\b|15 dias|gr[aá]tis", m.content, re.I)
+        )
+        prompt = self.brain.load_prompt(
+            "whatsapp_reply",
+            persona_name=me,
+            persona_role=self.config.persona.role,
+            persona_company=self.config.persona.company,
+            product_name=self.config.product.name,
+            product_description=self.config.product.description,
+            pricing=self.config.product.pricing,
+            handoff_mentions=handoffs,
+            trial_recent=trial_recent,
+            questions_recent=questions_recent,
+            pro_mentions=sum(
+                1 for m in convo.thread
+                if m.sender == "harvey" and re.search(r"\bpro\b|\bartes?\b", m.content, re.I)
+            ),
+            harvey_turns=harvey_turns,
+            pro_instruction=pro_instruction,
+            banned_phrases=", ".join(
+                f'"{p}"' for p in WHATSAPP_BANNED_PHRASES[len(BANNED_PHRASES):]
+            ),
+        )
+        if not prompt:
+            logger.error("Handler: prompts/whatsapp_reply.md is missing or unreadable.")
+            return ""
+        if self.skills:
+            prompt += "\n\nCONHECIMENTO DO PRODUTO:\n" + self.skills
+        hint = ""
+        if intent == "objection":
+            for trigger, response in self.config.product.objection_responses.items():
+                if trigger.lower() in reply_text.lower():
+                    hint = f"\nAbordagem sugerida para essa objeção: {response}"
+                    break
+        prompt += (
+            f"\n\nConversa até agora:\n{history}\n\n"
+            + (followup if followup else f"Intenção do cliente: {intent}{hint}")
+            + "\n\nEscreva SOMENTE a próxima mensagem do Harvey, sem rótulos."
+        )
+        # The send gate fails a blocked reply for good, and the customer's
+        # message is already consumed, so check it here and redraft instead.
+        phone = re.sub(r"\D", "", prospect.phone or "")
+        response = ""
+        for _ in range(1 + WA_REPLY_REDRAFTS):
+            response = await self.brain.think(
+                prompt, session_id="harvey-handler",
+                agent="handler", task="generate_response",
+            )
+            if not response:
+                paused = getattr(self.brain, "paused_reason", "")
+                if paused:
+                    raise BrainUnavailable(paused)
+                return ""
+            response = response.strip().strip('"')
+            if response.lower().startswith(("harvey:", "i can't", "i cannot", "as an ai", "sorry,")):
+                response = response.split(":", 1)[1].strip() if response.lower().startswith("harvey:") else ""
+            if not response:
+                return ""
+            # Only content problems; a bad number is the send gate's business.
+            reasons = [
+                r for r in pre_send_check_whatsapp(phone, response, kind="reply").reasons
+                if not r.startswith("invalid recipient")
+            ]
+            if not reasons:
+                return response
+            logger.warning(f"Handler: WhatsApp draft blocked ({'; '.join(reasons)}); redrafting.")
+            prompt += (
+                f"\n\nSua mensagem anterior foi bloqueada: {'; '.join(reasons)}. "
+                f"Mensagem bloqueada: \"{response}\"\n"
+                "Reescreva a mesma resposta corrigindo isso."
+            )
+        return ""  # still blocked: a human answers instead
+
+    async def _notify_owner(self, kind: str, prospect, convo):
+        """Tell the owner, on WhatsApp, that a conversation needs them.
+
+        Once per conversation and kind. A hot lead is also marked 'meeting' so
+        the dashboard surfaces it and no cold follow-up can reach them.
+        """
+        group = getattr(self.wa_cfg, "notify_group", "") if self.wa_cfg else ""
+        phone = getattr(self.wa_cfg, "notify_phone", "") if self.wa_cfg else ""
+        if not (group or phone) or not self.wa or not self.wa.is_configured():
+            return
+        key = f"wa_notified:{convo.id}:{kind}"
+        if await self.state.get_setting(key):
+            return
+        if kind == "meeting":
+            await self.state.update_prospect_status(prospect.id, "meeting")
+            head = "Reunião a combinar"
+        elif kind == "arts":
+            head = "Cliente interessado em artes (um designer deve enviar o portfólio)"
+        elif kind == "cold":
+            head = "Conversa esfriou (sem resposta depois das retomadas)"
+        else:
+            head = "Cliente precisa de você"
+        recent = "\n".join(
+            f"{'Harvey' if m.sender == 'harvey' else 'Cliente'}: {m.content[:160]}"
+            for m in convo.thread[-5:]
+        )
+        text = (
+            f"{head}: {prospect.company}\n"
+            f"WhatsApp: +{prospect.phone}\n\n{recent}\n\n"
+            "Veja a conversa completa na aba Conversas do Harvey (localhost:5555)."
+        )
+        result = await (self.wa.send_jid(group, text) if group else self.wa.send_text(phone, text))
+        if result.ok:
+            await self.state.set_setting(key, "1")
+            await self.state.log_action(
+                action_type="owner_notified", agent="handler",
+                details={"kind": kind, "company": prospect.company},
+            )
+            logger.info(f"Handler: owner notified ({kind}) about {prospect.company}.")
+        else:
+            logger.warning(f"Handler: could not notify owner: {result.error}")
+
+    async def _queue_whatsapp_reply(
+        self, response: str, prospect, convo, intent: str, kind: str = "reply"
+    ):
+        """Route Harvey's WhatsApp reply through the outbox approval ladder."""
+        require_approval = self.wa_cfg.require_approval if self.wa_cfg else True
+        item_id = await self.state.add_outbox_item(
+            prospect_id=prospect.id,
+            conversation_id=convo.id,
+            kind=kind,
+            to_email=prospect.phone,
+            subject="",
+            body=response,
+            send_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            status="pending_review" if require_approval else "approved",
+            provider="wa-akg",
+            channel="whatsapp",
+        )
+        if item_id:
+            mode = "queued for your approval" if require_approval else "queued to send"
+            logger.info(f"Handler: WhatsApp {kind} to {prospect.company} {mode} ({intent}).")
+            await self.state.log_action(
+                action_type="reply_queued",
+                agent="handler",
+                details={"prospect_phone": prospect.phone, "intent": intent,
+                         "response_preview": response[:100]},
+            )
+
     async def _handle_bounce(self, msg):
         """A bounce is a data bug AND a reputation threat. Fix both."""
         outbox_item = await self.state.find_outbox_by_message_id(msg.in_reply_to)
@@ -445,7 +833,7 @@ class Handler:
             )
 
         bounces = await self.state.increment_setting(BOUNCE_COUNT_KEY)
-        total_sent = await self.state.count_outbox_sent()
+        total_sent = await self.state.count_outbox_sent(channel="email")
         await self.state.log_action(
             action_type="bounce",
             agent="handler",
@@ -560,7 +948,12 @@ Respond with ONLY the category label, nothing else."""
         # Stage advancement rules
         if intent == "interested":
             # Meeting/call signals from an interested prospect → closing
-            if any(w in text_lower for w in ["let's meet", "schedule", "calendar", "book a call", "free on", "available"]):
+            if any(w in text_lower for w in [
+                "let's meet", "schedule", "calendar", "book a call", "free on", "available",
+                "reunião", "reuniao", "agendar", "marcar uma", "videochamada",
+                "quero testar", "vamos testar", "quero experimentar", "quero começar",
+                "quero comecar", "pode começar", "pode comecar", "quero fechar", "vou querer",
+            ]) or re.search(r"\b\d{1,2}\s?(h|:\d{2}|horas)\b", text_lower):
                 return "closing"
             if current_stage == "initial_outreach":
                 return "engaged"
@@ -589,9 +982,12 @@ Respond with ONLY the category label, nothing else."""
         return current_stage
 
     async def _generate_response(
-        self, intent: str, reply_text: str, prospect, convo: Conversation
+        self, intent: str, reply_text: str, prospect, convo: Conversation,
+        channel: str = "email",
     ) -> str:
         """Generate an appropriate response based on intent."""
+        if channel == "whatsapp":
+            return await self._generate_whatsapp_response(intent, reply_text, prospect, convo)
         # Build conversation history for context
         history = "\n".join(
             f"{'Harvey' if m.sender == 'harvey' else prospect.full_name()}: {m.content}"

@@ -1,78 +1,107 @@
 persona:
   name: "Harvey"
-  company: "Your Company"
-  role: "Business Development"
-  email: "harvey@yourcompany.com"
-  linkedin: "linkedin.com/in/harvey-yourcompany"
-  tone: "professional, consultative, confident"
+  company: "Prospect Boost"
+  role: "Consultor de Vendas"
+  email: "admin@prospectboost.com.br"
+  linkedin: ""
+  tone: "profissional, consultivo, prestativo e direto"
 
 product:
-  name: "Your Product"
-  description: "Describe what your product does and who it's for"
-  pricing: "Starting at $X/mo"
+  name: "Vitrine ProspectBoost"
+  description: "Vitrine digital de vendas personalizada no WhatsApp. Ativação imediata em sualoja.prospectboost.com.br, com migração para domínio próprio (sualoja.com.br) após a assinatura."
+  pricing: "15 dias grátis em sualoja.prospectboost.com.br. Plano Básico: R$ 97/mês (vitrine + domínio próprio). Plano Pro: R$ 197/mês (vitrine + domínio próprio + 2 artes profissionais toda semana)."
   key_benefits:
-    - "Benefit 1"
-    - "Benefit 2"
-    - "Benefit 3"
+    - "15 dias de teste grátis com link imediato (sualoja.prospectboost.com.br)"
+    - "Domínio próprio definitivo (sualoja.com.br) incluso para assinantes"
+    - "Pacote com 2 artes profissionais semanais prontas para postar (Plano Pro)"
+    - "Vitrine rápida com finalização direta no WhatsApp do lojista"
+    - "Plataforma simples para cadastrar produtos e fotos"
   objection_responses:
-    "too expensive": "I understand budget is important. Most of our clients see ROI within 30 days..."
-    "already have a solution": "That makes sense. Curious — what's the one thing you wish it did better?"
-    "not interested": "No worries at all. Mind if I ask what your current approach looks like?"
+    "too expensive": "Entendo perfeitamente que cada custo conta. Por isso liberamos 15 dias 100% grátis pra você ver o resultado antes de pagar qualquer coisa. O plano Pro custa menos de R$ 7 por dia e já inclui tanto a vitrine no seu domínio próprio quanto 2 artes semanais feitas por designer."
+    "already have a solution": "Muito bom que já tenha um formato de vendas! Nosso grande diferencial é que além da vitrine rápida com seu próprio domínio (loja.com.br), nossa equipe cria 2 artes profissionais toda semana pra você divulgar seus produtos sem perder tempo. Que tal ver uma prévia de 15 dias grátis?"
+    "not interested": "Sem problemas! Se em algum momento precisar profissionalizar o catálogo no WhatsApp com seu domínio próprio e economizar tempo na criação de artes, estamos por aqui. Boas vendas!"
   offer:
-    primary: ""                    # Main offer (e.g., "Monthly subscription starting at $99/mo")
-    entry: ""                      # Low-commitment entry (e.g., "14-day free trial", "Free audit")
-    goal: "book_call"              # Goal of outreach: book_call, start_trial, get_reply
-    booking_method: "calendar_link" # calendar_link, suggest_times, ask_preference
-    booking_url: ""                # Calendar link URL (if using calendar_link method)
-    meeting_duration: "15 minutes" # How long the call is
-    meeting_owner: ""              # Who takes the meeting (name or role)
+    primary: "Plano Pro por R$ 197/mês (vitrine + domínio próprio + 2 artes semanais)"
+    entry: "15 dias de teste grátis sem compromisso"
+    goal: "start_trial"
+    booking_method: "ask_preference"
+    booking_url: ""
+    meeting_duration: "15 minutes"
+    meeting_owner: "Equipe ProspectBoost"
 
 icp:
   industries:
-    - "SaaS"
-    - "Marketing Agency"
-  company_size: "10-200 employees"
+    - "loja de roupa feminina"
+    - "loja de calçados"
+    - "loja de acessórios e semijoias"
+    - "loja de bolsas"
+    - "moda masculina"
+    - "moda infantil"
+    - "boutique"
+    - "loja de presentes"
+  company_size: "1-20 funcionários"
   titles:
-    - "VP Marketing"
-    - "Head of Growth"
-    - "CMO"
-    - "Director of Marketing"
+    - "Proprietário"
+    - "Dono"
+    - "Gerente"
+    - "Sócio"
   geography:
-    - "United States"
-  # Roles that signal a company is in-market RIGHT NOW (a company hiring a
-  # "Head of Growth" is shopping for growth tooling). Used for careers-page
-  # scanning and job-board discovery. Empty = fall back to titles above.
+    - "Brasil"
   hiring_signals: []
+  exclude_industries: [restaurante, restaurant, churrasc, lanchonete, hamburguer, burger, burguer, espeto, grill, pizzaria, cafeteria, cafe, chopp, padaria, sorvet, acai, cabeleireir, cabelo, hairdresser, barbearia, salao, beleza, beauty]
+  include_keywords: [loja, lojas, store, shop, boutique, magazine, variedades, utilidades, moda, roupa, calcad, sapato, tenis, chinel, semijoia, joia, joalheria, bijuteria, bolsa, mala, confecc, lingerie, infantil, presente, esportiv, fitness, perfumaria, cosmetic, maquiagem, otica, "pet shop", petshop, "acessorios de moda"]   # qualquer loja que venda produtos entra; serviço (restaurante, salão, telecom) não
 
 channels:
   email:
     enabled: true
-    provider: "gmail"          # gmail (recommended) | microsoft | smtp | instantly
+    provider: "smtp"
     max_daily_sends: 50
-    require_approval: true      # native providers: emails wait in the Outbox
-    send_to_risky: false        # also send to catch-all domains (off = safest)
-    max_bounce_rate: 0.05       # pause all sending if bounces exceed this
+    require_approval: true
+    send_to_risky: false
+    max_bounce_rate: 0.05
   linkedin:
-    enabled: true
+    enabled: false
     max_daily_connections: 20
     max_daily_messages: 10
+  whatsapp:
+    enabled: true               # needs WA_AKG_* in .env (check: harvey whatsapp test); holds quietly until then
+    max_daily_sends: 50         # mensagens frias por dia (respostas não contam)
+    ramp_start_sends: 0          # sem rampa: 50 por dia desde já
+    require_approval: false     # autopilot: envia e responde sem aprovação
+    default_country_code: "55"
+    persona_name: "Rafael"        # como o assistente se apresenta no WhatsApp
+    opt_out_lines: []            # sem frase de descadastro na 1ª mensagem; "não quero"/"pare" continuam sendo entendidos
+    opener_test: true            # A/B: abertura A (original) x B (pergunta curta); veja com: harvey whatsapp stats
+    min_gap_seconds: 30
+    max_gap_seconds: 90
+    reply_window_days: 14
+    followup_delays_hours: [24, 72]   # quem respondeu e sumiu: retomada 24h depois, outra 3 dias depois, depois aviso no grupo
+    notify_group: "120363428715949829@g.us"   # grupo "Prospectar": avisos de reunião / cliente que precisa de você
+    notify_phone: "5517997191017"             # usado só se notify_group estiver vazio
 
 usage:
   max_daily_claude_percent: 80
   heartbeat_interval_minutes: 15
   quiet_hours:
-    start: "22:00"
-    end: "07:00"
-    timezone: "America/New_York"
+    start: "21:00"
+    end: "08:00"
+    timezone: "America/Sao_Paulo"
 
-# Optional: check each new recipient with Precleared (precleared.dev) before
-# the first cold email: may cold marketing email go to this address under UK
-# PECR, US CAN-SPAM, Canada's CASL, Germany's UWG and France's rules? Any other
-# answer holds the email back, with the reason in the Outbox. One check per
-# address; 10 a day free without a key, 25 with a free key (PRECLEARED_API_KEY
-# in .env). Applies to the native providers (gmail, smtp).
 compliance:
   precleared:
     enabled: false
-    sender_country: ""          # GB or US: where your business is based
-    address_source: "unknown"   # published | bought | scraped | given | unknown
+    sender_country: "BR"
+    address_source: "published"
+
+discovery:
+  night_shift: true            # nas horas de silêncio: busca lojas no Google Maps e deixa as mensagens prontas
+  provider: gmaps_scraper
+  cities:                      # cidades varridas, uma a uma
+    - "Votuporanga, SP"
+    - "Fernandópolis, SP"
+    - "Jales, SP"
+    - "Santa Fé do Sul, SP"
+    - "Mirassol, SP"
+    - "São José do Rio Preto, SP"
+  queue_target: 120            # para de buscar quando houver tantas mensagens prontas
+  results_per_search: 100

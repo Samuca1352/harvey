@@ -105,3 +105,63 @@ def pre_send_check(
         reasons.append("HTML markup in body (plain text only)")
 
     return GateResult(ok=not reasons, reasons=reasons)
+
+
+# ── WhatsApp ──────────────────────────────────────────────────────────
+
+# Phrases that read as mass spam (and get a number reported) in Portuguese,
+# plus the AI tells already banned for email.
+WHATSAPP_BANNED_PHRASES = BANNED_PHRASES + (
+    "clique aqui", "clique no link", "compre agora", "oferta imperdível",
+    "oferta imperdivel", "última chance", "ultima chance", "aproveite agora",
+    "ganhe dinheiro", "100% grátis", "100% gratis", "sem compromisso nenhum",
+    "parabéns, você", "parabens, voce", "você foi selecionado",
+    "voce foi selecionado", "como um modelo de linguagem", "como uma ia",
+)
+
+WHATSAPP_MAX_WORDS = 90      # a chat message, not an email
+PHONE_RE = re.compile(r"^\d{10,15}$")
+
+
+def pre_send_check_whatsapp(
+    to_phone: str,
+    body: str,
+    prospect=None,
+    kind: str = "sequence",
+) -> GateResult:
+    """Deterministic checks for an outgoing WhatsApp message."""
+    reasons: list[str] = []
+    body = (body or "").strip()
+    to_phone = (to_phone or "").strip()
+
+    if not PHONE_RE.match(to_phone):
+        reasons.append(f"invalid recipient number '{to_phone}'")
+    if prospect is not None:
+        if re.sub(r"\D", "", prospect.phone or "") != to_phone:
+            reasons.append("recipient does not match the prospect record")
+
+    if not body:
+        reasons.append("empty message")
+    words = len(body.split())
+    if words > WHATSAPP_MAX_WORDS:
+        reasons.append(f"message too long ({words} words > {WHATSAPP_MAX_WORDS})")
+
+    leftover = MERGE_TAG_RE.findall(body)
+    if leftover:
+        reasons.append(f"unrendered merge tags: {sorted(set(leftover))[:3]}")
+
+    lowered = body.lower()
+    hits = [p for p in WHATSAPP_BANNED_PHRASES if p in lowered]
+    if hits:
+        reasons.append(f"banned phrases: {hits[:3]}")
+
+    # Links in a cold first message are what gets a number reported.
+    if kind == "sequence" and URL_RE.findall(body):
+        reasons.append("link in a cold first message")
+    elif len(URL_RE.findall(body)) > MAX_LINKS:
+        reasons.append("too many links")
+
+    if re.search(r"<\s*(html|body|div|table|img|a)\b", body, re.IGNORECASE):
+        reasons.append("HTML markup in message (plain text only)")
+
+    return GateResult(ok=not reasons, reasons=reasons)

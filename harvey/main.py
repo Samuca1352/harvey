@@ -19,6 +19,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("harvey")
+# Every HTTP call logs at INFO; the WhatsApp watcher makes several per minute.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Backoff for consecutive failed cycles: 60s, 120s, 240s, ... capped at 15 min
 ERROR_BACKOFF_BASE = 60
@@ -155,6 +157,38 @@ async def _interruptible_sleep(seconds: float, stop_event: asyncio.Event) -> boo
         return False
 
 
+# How often the WhatsApp watcher looks for new messages, and how far back it
+# looks. The 15-minute heartbeat still covers the rest of the reply window.
+WHATSAPP_WATCH_SECONDS = 15
+WHATSAPP_WATCH_DAYS = 3
+
+
+async def whatsapp_watcher(handler, whatsapp, brain, config, stop_event):
+    """Answer WhatsApp messages within seconds instead of at the next heartbeat.
+
+    Replies go out at any hour — a person who just wrote to us is waiting —
+    while cold messages stay inside the quiet hours (heartbeat only). Skips a
+    beat whenever the brain is unusable or over budget, and honours the
+    kill switch through the agent.
+    """
+    max_calls = max(int(200 * (config.usage.max_daily_claude_percent / 100)), 1)
+    logger.info(f"WhatsApp watcher on: checking for replies every {WHATSAPP_WATCH_SECONDS}s.")
+    while not stop_event.is_set():
+        try:
+            if not brain.paused_reason and await brain.is_within_budget(
+                max_calls, max_percent=config.usage.max_daily_claude_percent
+            ):
+                await whatsapp.ensure_online()
+                await handler._run_whatsapp(days=WHATSAPP_WATCH_DAYS)
+                await whatsapp.send(replies_only=True)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            raise
+        except Exception as e:
+            logger.error(f"WhatsApp watcher: {e}", exc_info=True)
+        if await _interruptible_sleep(WHATSAPP_WATCH_SECONDS, stop_event):
+            break
+
+
 async def heartbeat(stop_event: asyncio.Event | None = None):
     """Harvey's main loop. Wakes up, decides, acts, sleeps. Repeat."""
     if stop_event is None:
@@ -189,12 +223,31 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     from harvey.agents.sender import Sender
     from harvey.agents.handler import Handler
     from harvey.agents.analyst import Analyst
+    from harvey.agents.whatsapp import WhatsAppAgent
 
     scout = Scout(brain, state, config, env)
     writer = Writer(brain, state, config, env)
     sender = Sender(brain, state, config, env)
     handler = Handler(brain, state, config, env)
     analyst = Analyst(state)
+    whatsapp = WhatsAppAgent(brain, state, config, env)
+    wa_on = whatsapp.enabled
+    if wa_on:
+        logger.info("WhatsApp channel is on (WA-AKG gateway).")
+
+    watcher = None
+    if wa_on:
+        watcher = asyncio.create_task(
+            whatsapp_watcher(handler, whatsapp, brain, config, stop_event)
+        )
+
+    night = None
+    if config.discovery.night_shift and wa_on:
+        from harvey.night import night_shift
+        night = asyncio.create_task(
+            night_shift(state, config, whatsapp, brain, stop_event,
+                        lambda cfg: in_quiet_hours(cfg))
+        )
 
     interval = config.usage.heartbeat_interval_minutes * 60
     max_calls = max(int(200 * (config.usage.max_daily_claude_percent / 100)), 1)
@@ -288,7 +341,12 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                 send_tasks.append(("send_campaign", sender.run))
             elif sender.is_native:
                 send_tasks.append(("send_outbox", sender.run))
-            if sender.is_native and not any(n == "handle_replies" for n, _ in tasks):
+            if wa_on:
+                # Businesses with a mobile number become prospects and get a
+                # first message drafted (staged in the Outbox for approval).
+                tasks.append(("whatsapp_prepare", whatsapp.run()))
+                send_tasks.append(("send_whatsapp", whatsapp.send))
+            if (sender.is_native or wa_on) and not any(n == "handle_replies" for n, _ in tasks):
                 tasks.append(("read_replies", handler.run()))
 
             # Profiling rides along every cycle. It is three HTTP requests per
@@ -349,6 +407,10 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             if await _interruptible_sleep(backoff, stop_event):
                 break
 
+    if watcher:
+        watcher.cancel()
+    if night:
+        night.cancel()
     logger.info("Harvey shutting down. Deals don't close themselves, but I need a break.")
 
 

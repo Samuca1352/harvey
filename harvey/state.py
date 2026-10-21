@@ -413,6 +413,15 @@ MIGRATIONS: list[str] = [
     -- so one subscription's budget never consumes the other's.
     ALTER TABLE usage_log ADD COLUMN codex_calls INTEGER DEFAULT 0;
     """,
+    # ── v12: outbox rows carry their channel (email | whatsapp) ──
+    """
+    -- Every row before this migration was an email. For a whatsapp row,
+    -- `to_email` holds the recipient's digits-only phone number ("5511...")
+    -- so the Outbox tab, `harvey outbox` and the approval ladder work
+    -- unchanged; `subject` is empty.
+    ALTER TABLE outbox ADD COLUMN channel TEXT DEFAULT 'email';
+    CREATE INDEX IF NOT EXISTS idx_outbox_channel_status ON outbox(channel, status);
+    """,
 ]
 
 BRAIN_PROVIDERS = ("claude", "codex")
@@ -739,6 +748,20 @@ class StateManager:
                 row = await cursor.fetchone()
                 return self._prospect_from_row(row) if row else None
 
+    async def get_prospect_by_phone(self, phone: str) -> Prospect | None:
+        """Look up a prospect by digits-only phone number."""
+        phone = "".join(ch for ch in (phone or "") if ch.isdigit())
+        if not phone:
+            return None
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM prospects WHERE phone = ? ORDER BY created_at ASC LIMIT 1",
+                (phone,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return self._prospect_from_row(row) if row else None
+
     async def update_prospect_email(
         self, prospect_id: str, email: str, email_status: str
     ):
@@ -828,21 +851,26 @@ class StateManager:
         provider: str = "",
         thread_ref: str = "",
         in_reply_to: str = "",
+        channel: str = "email",
     ) -> str | None:
-        """Queue one outgoing email. Returns its id, or None when the
-        (campaign, prospect, step) slot already exists — the double-send guard."""
+        """Queue one outgoing message. Returns its id, or None when the
+        (campaign, prospect, step) slot already exists — the double-send guard.
+
+        For ``channel="whatsapp"`` pass the digits-only phone as ``to_email``.
+        """
         item_id = _new_id()
         async with self._connect() as db:
             cursor = await db.execute(
                 """INSERT OR IGNORE INTO outbox
                    (id, campaign_id, prospect_id, conversation_id, step, kind,
                     to_email, subject, body, status, send_at, provider,
-                    thread_ref, in_reply_to)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    thread_ref, in_reply_to, channel)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     item_id, campaign_id, prospect_id, conversation_id,
                     int(step), kind, _norm(to_email), subject, body,
                     status, send_at, provider, thread_ref, in_reply_to,
+                    channel,
                 ),
             )
             await db.commit()
@@ -854,8 +882,16 @@ class StateManager:
         due_before: str | None = None,
         limit: int = 200,
         exclude_kind: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
     ) -> list[dict]:
         where, params = [], []
+        if kind:
+            where.append("kind = ?")
+            params.append(kind)
+        if channel:
+            where.append("COALESCE(channel, 'email') = ?")
+            params.append(channel)
         if status:
             where.append("status = ?")
             params.append(status)
@@ -873,6 +909,15 @@ class StateManager:
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(sql, params) as cursor:
+                return [dict(r) for r in await cursor.fetchall()]
+
+    async def get_outbox_for_conversation(self, convo_id: str, kind: str) -> list[dict]:
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM outbox WHERE conversation_id = ? AND kind = ? ORDER BY created_at",
+                (convo_id, kind),
+            ) as cursor:
                 return [dict(r) for r in await cursor.fetchall()]
 
     async def get_outbox_item(self, item_id: str) -> dict | None:
@@ -932,20 +977,97 @@ class StateManager:
             await db.commit()
             return cursor.rowcount
 
-    async def count_outbox_sent(self) -> int:
+    async def count_outbox_sent(self, channel: str | None = None) -> int:
+        sql = "SELECT COUNT(*) FROM outbox WHERE status = 'sent'"
+        params: tuple = ()
+        if channel:
+            sql += " AND COALESCE(channel, 'email') = ?"
+            params = (channel,)
         async with self._connect() as db:
-            async with db.execute(
-                "SELECT COUNT(*) FROM outbox WHERE status = 'sent'"
-            ) as cursor:
+            async with db.execute(sql, params) as cursor:
                 return (await cursor.fetchone())[0]
 
-    async def count_outbox_sent_today(self) -> int:
+    async def count_outbox_sent_today(
+        self, channel: str | None = None, kind: str | None = None
+    ) -> int:
+        sql = "SELECT COUNT(*) FROM outbox WHERE status = 'sent' AND date(sent_at) = date('now')"
+        params: list = []
+        if channel:
+            sql += " AND COALESCE(channel, 'email') = ?"
+            params.append(channel)
+        if kind:
+            sql += " AND kind = ?"
+            params.append(kind)
+        async with self._connect() as db:
+            async with db.execute(sql, params) as cursor:
+                return (await cursor.fetchone())[0]
+
+    # ── WhatsApp helpers ──
+
+    async def first_whatsapp_cold_send_date(self) -> str:
+        """Date (UTC, YYYY-MM-DD) of the first cold WhatsApp message, or ""."""
         async with self._connect() as db:
             async with db.execute(
-                "SELECT COUNT(*) FROM outbox WHERE status = 'sent' "
-                "AND date(sent_at) = date('now')"
+                "SELECT date(MIN(sent_at)) FROM outbox WHERE channel = 'whatsapp' "
+                "AND kind = 'sequence' AND status = 'sent'"
             ) as cursor:
-                return (await cursor.fetchone())[0]
+                row = await cursor.fetchone()
+                return (row[0] or "") if row else ""
+
+    async def has_outbox_for_prospect(self, prospect_id: str, channel: str) -> bool:
+        """Whether this prospect already has ANY message queued or sent on a
+        channel (cancelled and rejected ones don't count as contact)."""
+        async with self._connect() as db:
+            async with db.execute(
+                "SELECT 1 FROM outbox WHERE prospect_id = ? "
+                "AND COALESCE(channel, 'email') = ? AND kind = 'sequence' "
+                "AND status NOT IN ('cancelled', 'rejected') LIMIT 1",
+                (prospect_id, channel),
+            ) as cursor:
+                return bool(await cursor.fetchone())
+
+    async def get_recent_whatsapp_contacts(self, days: int = 14) -> list[dict]:
+        """People we messaged on WhatsApp in the last ``days`` days.
+
+        Each row: prospect_id, phone, first_sent_at, last_sent_at. This is the
+        set whose replies are worth polling for.
+        """
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT prospect_id, to_email AS phone,
+                          MIN(sent_at) AS first_sent_at, MAX(sent_at) AS last_sent_at
+                   FROM outbox
+                   WHERE channel = 'whatsapp' AND status = 'sent'
+                     AND sent_at >= datetime('now', ?)
+                   GROUP BY prospect_id, to_email
+                   ORDER BY last_sent_at DESC""",
+                (f"-{int(days)} days",),
+            ) as cursor:
+                return [dict(r) for r in await cursor.fetchall()]
+
+    async def get_companies_needing_whatsapp_prospect(self, limit: int = 50) -> list[Company]:
+        """Companies with a phone number that haven't become a WhatsApp prospect."""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT * FROM companies c
+                   WHERE c.phone != ''
+                     AND NOT EXISTS (
+                         SELECT 1 FROM prospects p
+                         WHERE p.company_id = c.id AND p.source = 'whatsapp:business')
+                   ORDER BY c.created_at ASC LIMIT ?""",
+                (int(limit),),
+            ) as cursor:
+                return [self._company_from_row(r) for r in await cursor.fetchall()]
+
+    async def set_prospect_phone(self, prospect_id: str, phone: str, verified: bool):
+        async with self._connect() as db:
+            await db.execute(
+                "UPDATE prospects SET phone = ?, phone_verified = ?, updated_at = ? WHERE id = ?",
+                (phone, int(verified), _utcnow().isoformat(), prospect_id),
+            )
+            await db.commit()
 
     async def find_outbox_by_message_id(self, message_id: str) -> dict | None:
         if not message_id:
