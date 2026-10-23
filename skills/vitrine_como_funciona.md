@@ -20,8 +20,9 @@ que confirma com a equipe e não invente.
 - **Produto esgotado ou fora de linha:** marca como indisponível, ou apaga.
   Apagar é seguro, dá para recuperar (os produtos não somem de vez).
 - **Destaques:** o lojista escolhe produtos para aparecerem em destaque no topo.
-- **Fotos:** no teste grátis e no plano Essential, 1 foto por produto. No plano
-  Pro, até 5 fotos por produto (carrossel), e o lojista escolhe qual é a capa.
+- **Fotos:** no teste grátis e no plano Essential, até 5 fotos por produto. No
+  plano Pro, até 10 fotos por produto. As fotos aparecem em carrossel e o
+  lojista escolhe qual é a capa.
   As fotos são enviadas direto do celular ou computador.
 - **Pedidos:** o cliente final monta o carrinho na vitrine, informa nome e
   endereço e finaliza. O pedido chega pronto e organizado no WhatsApp do
@@ -43,8 +44,8 @@ que confirma com a equipe e não invente.
 - Depois pode usar o domínio da própria loja (ex.: sualoja.com.br).
 
 ## Planos (diferença real entre eles)
-- **Essential:** catálogo, pedidos pelo WhatsApp, 1 foto por produto.
-- **Pro:** tudo do Essential, até 5 fotos por produto e as artes de marketing
+- **Essential:** catálogo, pedidos pelo WhatsApp, até 5 fotos por produto.
+- **Pro:** tudo do Essential, até 10 fotos por produto e as artes de marketing
   (2 por semana). As artes ficam disponíveis no painel, na Central de
   Marketing, prontas para baixar e postar.
 
@@ -160,7 +161,7 @@ https://painel.prospectboost.com.br/cadastro
   logo e escolher a cor, escrever a descrição da loja, criar a primeira
   categoria, cadastrar o primeiro produto e abrir a vitrine para compartilhar o
   link. Leva uns 5 minutos.
-- No teste é o plano Básico: 1 foto por produto e sem artes.
+- No teste é o plano Básico: até 5 fotos por produto e sem artes.
 - É um teste por número de WhatsApp.
 - **Quando a pessoa quiser testar, mande o link** e diga que é rapidinho. Se ela
   travar em algum passo, ajude.

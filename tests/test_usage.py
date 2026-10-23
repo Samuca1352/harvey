@@ -162,3 +162,40 @@ def test_parse_window():
     assert _parse_window({"utilization": "bad"}) is None
     assert _parse_window(None) is None
     assert _parse_window({"utilization": 0})["utilization"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_quota_reading_is_shared_and_stands_in_when_the_endpoint_refuses(tmp_path):
+    import json as _json
+    import time as _time
+    from harvey.integrations import quota as quota_mod
+
+    path = tmp_path / "quota_cache.json"
+    reading = {"five_hour": {"utilization": 34.0, "resets_at": ""}}
+    calls = []
+
+    async def ok(self):
+        calls.append(1)
+        return reading
+
+    async def refused(self):            # 429
+        calls.append(1)
+        return None
+
+    a = quota_mod.QuotaClient(cache_path=path)
+    a._fetch = ok.__get__(a)
+    assert await a.get_utilization() == reading
+
+    b = quota_mod.QuotaClient(cache_path=path)  # another process, or after a restart
+    b._fetch = refused.__get__(b)
+    assert await b.get_utilization() == reading and len(calls) == 1      # fresh: no fetch at all
+
+    path.write_text(_json.dumps({"at": _time.time() - 600, "windows": reading}))
+    c = quota_mod.QuotaClient(cache_path=path)
+    c._fetch = refused.__get__(c)
+    assert await c.get_utilization() == reading and len(calls) == 2      # refused: last reading
+
+    path.write_text(_json.dumps({"at": _time.time() - 7200, "windows": reading}))
+    d = quota_mod.QuotaClient(cache_path=path)
+    d._fetch = refused.__get__(d)
+    assert await d.get_utilization() is None                             # too old to trust

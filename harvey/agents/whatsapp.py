@@ -18,20 +18,22 @@ Replies are read by the Handler, which polls the gateway.
 """
 
 import asyncio
+import difflib
 import logging
-import math
 import random
 import re
 import unicodedata
 
 import pytz
-from datetime import datetime, time as dtime, timezone
+from datetime import datetime, time as dtime, timedelta, timezone
 
 from harvey.brain import Brain
 from harvey.config import EnvConfig, HarveyConfig, whatsapp_persona_name
 from harvey.gate import pre_send_check_whatsapp
 from harvey.integrations.whatsapp import (
+    HANDOFF_SUBJECT,
     WhatsAppClient,
+    _parse_ts,
     is_mobile,
     normalize_phone,
 )
@@ -53,6 +55,10 @@ WRITE_BATCH = 8
 MAX_SENDS_PER_CYCLE = 4
 MAX_DRAFT_ATTEMPTS = 3
 REPLY_DELAY_SECONDS = (4, 12)
+# Cold messages go out one at a time, each after a random gap, from whichever
+# pass (fast watcher or heartbeat) finds it due: no clockwork 15-minute rhythm.
+NEXT_COLD_KEY = "wa_next_cold_at"
+MIN_COLD_GAP_SECONDS = 240
 # Opener B asks about one of these, picked per prospect, so the messages sent
 # in a day don't read as copies of each other.
 QUESTION_ANGLES = (
@@ -63,6 +69,31 @@ QUESTION_ANGLES = (
     "como ela mostra os produtos novos para os clientes hoje",
     "como é para ela atender o cliente na loja e no WhatsApp ao mesmo tempo",
 )
+# How a first message opens, one picked at random per draft, plus a random
+# length: near-identical messages from one number are what WhatsApp's spam
+# filter catches, so no two openers may share a skeleton. No "bom dia": the
+# draft is written hours before it goes out.
+OPENING_STYLES = (
+    "Comece com 'Olá' e diga seu nome e a empresa na mesma frase.",
+    "Comece pelo nome da loja, como quem acabou de ver o perfil dela, e só depois diga quem você é.",
+    "Comece com 'Oi, tudo bem?' sozinho e se apresente na frase seguinte só com o primeiro nome; cite a empresa no fim.",
+    "Apresente-se no formato '{name} aqui, da {company}' e emende com o que viu da loja.",
+    "Comece com uma observação curta e verdadeira sobre o tipo de loja e a cidade; depois se apresente.",
+    "Comece com 'Oi!', faça logo a pergunta e deixe uma apresentação curtinha para o fim.",
+    "Bem curta e casual: 'Opa' ou 'Olá', seu nome e a pergunta, quase sem mais nada.",
+    "Diga só o seu nome na primeira frase; a empresa aparece de passagem, no meio ou no fim.",
+    "Comece pela pergunta sobre a loja e se apresente logo depois, em meia frase.",
+    "Use 'Tudo certo?' ou 'Como vai?' no lugar de 'tudo bem', depois nome e empresa.",
+    "Comece reconhecendo algo concreto dos FATOS (o segmento, o tipo de produto), sem elogio exagerado, depois se apresente.",
+    "Comece com 'E aí, tudo bom?' e se apresente de um jeito leve, sem formalidade.",
+)
+OPENER_LENGTHS = ((12, 20), (16, 26), (22, 34), (30, 45))
+# Draft rejected when this close (0-1) to one of the recent openers. Measured:
+# the old two-template openers sat at ~0.85 from their nearest neighbour,
+# varied ones at ~0.55.
+MAX_OPENER_SIMILARITY = 0.7
+RECENT_OPENERS = 40
+
 # Prospect statuses that mean "stop messaging this person".
 STOP_STATUSES = {"replied", "opted_out", "lost", "meeting", "closed"}
 
@@ -71,6 +102,15 @@ def _plain(text: str) -> str:
     """Lowercase without accents, so "Salão" matches "salao"."""
     text = unicodedata.normalize("NFKD", text or "")
     return "".join(c for c in text if not unicodedata.combining(c)).lower()
+
+
+def _skeleton(text: str, store: str) -> str:
+    """An opener with the store's name taken out, to compare structure."""
+    plain = _plain(text)
+    for word in re.findall(r"\w+", _plain(store)):
+        if len(word) > 2:
+            plain = re.sub(rf"\b{re.escape(word)}\b", "", plain)
+    return re.sub(r"\s+", " ", plain).strip()
 
 
 def _now() -> datetime:
@@ -280,14 +320,19 @@ class WhatsAppAgent:
             persona_role=self.config.persona.role,
             persona_tone=self.config.persona.tone,
             angle=random.choice(QUESTION_ANGLES),
+            opening=self._opening(),
+            length="Entre {} e {} palavras.".format(*random.choice(OPENER_LENGTHS)),
         )
         if not prompt:
             logger.error("WhatsApp: the opener prompt (prompts/whatsapp*.md) is missing or unreadable.")
             return ""
         prompt += "\n\nFATOS sobre o negócio (tudo o que você sabe):\n" + "\n".join(facts)
 
+        recent = [
+            _skeleton(b, c) for b, c in await self.state.get_recent_whatsapp_openers(RECENT_OPENERS)
+        ]
         feedback = ""
-        for _ in range(2):  # one retry, told what the gate objected to
+        for _ in range(3):  # retries, told what the gate objected to
             result = await self.brain.think_json(
                 prompt + feedback, session_id="harvey-writer",
                 agent="writer", task="whatsapp_message",
@@ -296,13 +341,28 @@ class WhatsAppAgent:
             if not body:
                 return ""
             gate = pre_send_check_whatsapp(prospect.phone, body, prospect=prospect)
-            if gate:
+            mine = _skeleton(body, prospect.company)
+            twin = max(
+                (difflib.SequenceMatcher(None, mine, r).ratio() for r in recent), default=0.0
+            )
+            if gate and twin <= MAX_OPENER_SIMILARITY:
                 return body[:1000]
+            reasons = list(gate.reasons)
+            if twin > MAX_OPENER_SIMILARITY:
+                reasons.append(
+                    "ficou parecida demais com uma mensagem já enviada a outra loja; "
+                    "mude a abertura, a ordem das frases e as palavras"
+                )
             feedback = (
-                "\n\nSua versão anterior foi recusada: " + "; ".join(gate.reasons)
+                "\n\nSua versão anterior foi recusada: " + "; ".join(reasons)
                 + ". Reescreva corrigindo isso."
             )
         return ""
+
+    def _opening(self) -> str:
+        return random.choice(OPENING_STYLES).format(
+            name=whatsapp_persona_name(self.config), company=self.config.persona.company,
+        )
 
     async def ensure_online(self) -> bool:
         """Cheap liveness check for the watcher: revive a stopped session even
@@ -359,16 +419,67 @@ class WhatsAppAgent:
             days = max(0, (datetime.now(timezone.utc).date() - datetime.fromisoformat(first).date()).days)
         return min(cap, self.cfg.ramp_start_sends + days * self.cfg.ramp_step_sends)
 
-    def cold_per_cycle(self, cold_left: int) -> int:
-        """Spread today's remaining cold messages over the rest of the sending
-        window, so 50 a day is one every ~15 minutes, not 12 cycles of four."""
+    async def cold_left_today(self) -> int:
+        """Cold messages still allowed today: under the daily cap and, when
+        set, under the cap on today's messages nobody answered."""
+        left = await self.daily_cap() - await self.state.count_outbox_sent_today(
+            channel="whatsapp", kind="sequence"
+        )
+        if self.cfg.max_daily_unanswered > 0:
+            left = min(left, self.cfg.max_daily_unanswered
+                       - await self.state.count_whatsapp_unanswered_today())
+        return left
+
+    def cold_gap_seconds(self, cold_left: int) -> float:
+        """Random wait before the next cold message: today's remaining sending
+        window shared out over what's left, stretched or squeezed at random,
+        with the odd long break, never under MIN_COLD_GAP_SECONDS."""
         qh = self.config.usage.quiet_hours
         now = datetime.now(pytz.timezone(qh.timezone))
         start = dtime.fromisoformat(qh.start)
         end = now.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
-        minutes = max(0.0, (end - now).total_seconds() / 60)
-        cycles = max(1, int(minutes // max(1, self.config.usage.heartbeat_interval_minutes)))
-        return max(1, min(MAX_SENDS_PER_CYCLE, math.ceil(cold_left / cycles)))
+        window = max(0.0, (end - now).total_seconds())
+        gap = window / max(1, cold_left) * random.uniform(0.45, 1.6)
+        if random.random() < 0.12:
+            gap *= random.uniform(1.8, 3.0)
+        return max(MIN_COLD_GAP_SECONDS + random.uniform(0, 120), gap)
+
+    def cold_paused(self) -> bool:
+        """Inside cold_paused_until: no new conversations at all, not even a
+        contact a shop shared (a restricted number can't start chats)."""
+        if not self.cfg.cold_paused_until:
+            return False
+        tz = pytz.timezone(self.config.usage.quiet_hours.timezone)
+        try:
+            until = tz.localize(datetime.fromisoformat(self.cfg.cold_paused_until))
+        except ValueError:
+            logger.warning(f"WhatsApp: cold_paused_until '{self.cfg.cold_paused_until}' isn't a date.")
+            return True
+        return datetime.now(tz) < until
+
+    async def cold_due(self) -> bool:
+        """May a cold message go out right now? Outside quiet hours, past any
+        pause, and its random gap is up. A stale or missing schedule (start of
+        the day) is set to a random point a little ahead instead of firing at
+        the stroke of the hour."""
+        if self.cold_paused():
+            return False
+        if not self.send_pacing:
+            return True             # tests: no clocks, no waiting
+        from harvey.main import in_quiet_hours
+        if in_quiet_hours(self.config):
+            return False
+        now = _now()
+        raw = await self.state.get_setting(NEXT_COLD_KEY)
+        try:
+            due_at = datetime.fromisoformat(raw) if raw else None
+        except ValueError:
+            due_at = None
+        if due_at is None or (now - due_at).total_seconds() > 6 * 3600:
+            later = now + timedelta(seconds=random.uniform(120, 1500))
+            await self.state.set_setting(NEXT_COLD_KEY, later.isoformat())
+            return False
+        return now >= due_at
 
     # ── sending ──
 
@@ -376,7 +487,8 @@ class WhatsAppAgent:
         """Send due, approved WhatsApp rows through the gateway.
 
         ``replies_only`` is the fast watcher's mode: it answers people who
-        wrote to us (at any hour) and never starts a new conversation.
+        wrote to us (at any hour, after a human-ish pause). Cold messages go
+        out in either mode, one at a time, when ``cold_due`` says so.
         """
         async with self._send_lock:
             await self._send(replies_only)
@@ -406,6 +518,17 @@ class WhatsAppAgent:
                 status="approved", due_before=now, limit=60, channel="whatsapp",
                 exclude_kind="reply",
             )
+        else:
+            # A contact the shop just shared is waiting on us, and a cold
+            # message may be due: the watcher is what makes the timing random.
+            cold_now = await self.cold_due()
+            due += [
+                i for i in await self.state.get_outbox(
+                    status="approved", due_before=now, limit=200, channel="whatsapp",
+                    kind="sequence",
+                )
+                if cold_now or i.get("subject") == HANDOFF_SUBJECT
+            ]
         if not due:
             return
 
@@ -416,19 +539,20 @@ class WhatsAppAgent:
             logger.warning(f"WhatsApp: not sending this cycle — {detail}")
             return
 
-        cold_left = await self.daily_cap() - await self.state.count_outbox_sent_today(
-            channel="whatsapp", kind="sequence"
-        )
-        cold_budget = self.cold_per_cycle(cold_left) if cold_left > 0 else 0
-        cold_sent = 0
+        cold_left = await self.cold_left_today()
+        cold_open = cold_left > 0 and await self.cold_due()
         sent = 0
-        # Replies first: someone is waiting for them.
-        due.sort(key=lambda i: (i["kind"] != "reply", i.get("send_at") or ""))
+        # Replies first, then contacts a shop just shared: someone is waiting.
+        due.sort(key=lambda i: (
+            i["kind"] != "reply", i.get("subject") != HANDOFF_SUBJECT, i.get("send_at") or ""
+        ))
         for item in due:
             if sent >= MAX_SENDS_PER_CYCLE:
                 break
             cold = item["kind"] == "sequence"
-            if cold and (cold_left <= 0 or cold_sent >= cold_budget):
+            # A shop asked us to call this one: no waiting for the gap.
+            handoff = cold and item.get("subject") == HANDOFF_SUBJECT and not self.cold_paused()
+            if cold and (cold_left <= 0 or not (cold_open or handoff)):
                 continue
 
             prospect = await self.state.get_prospect(item["prospect_id"])
@@ -473,6 +597,10 @@ class WhatsAppAgent:
                 # A person types; an instant answer reads like a machine.
                 await asyncio.sleep(random.uniform(*REPLY_DELAY_SECONDS))
 
+            if item["kind"] == "reply" and await self._customer_busy(phone, item.get("created_at") or ""):
+                logger.info(f"WhatsApp: {prospect.company} is still writing; holding the reply.")
+                continue
+
             result = await self.client.send_text(phone, item["body"])
             if not result.ok:
                 if result.retryable:
@@ -487,7 +615,14 @@ class WhatsAppAgent:
             sent += 1
             if cold:
                 cold_left -= 1
-                cold_sent += 1
+                if not handoff:
+                    # One cold message, then a fresh random wait.
+                    cold_open = False
+                    gap = self.cold_gap_seconds(cold_left)
+                    await self.state.set_setting(
+                        NEXT_COLD_KEY, (_now() + timedelta(seconds=gap)).isoformat()
+                    )
+                    logger.info(f"WhatsApp: next cold message in ~{gap / 60:.0f} min.")
             await self.state.update_outbox_item(
                 item["id"], status="sent", sent_at=_now().isoformat(),
                 message_id=result.message_id,
@@ -507,6 +642,28 @@ class WhatsAppAgent:
 
         if sent:
             logger.info(f"WhatsApp: {sent} message(s) sent this cycle.")
+
+    async def _customer_busy(self, phone: str, drafted_at: str) -> bool:
+        """Typing, or wrote again since this reply was drafted. The reply waits;
+        a new message gets it cancelled (stop-on-reply) and redrafted over
+        everything they said."""
+        if await self.client.is_typing(phone):
+            return True
+        # Messages from before our first send are never processed: only look
+        # around the time this reply was drafted.
+        drafted = _parse_ts(drafted_at)
+        if not drafted:
+            return False
+        try:
+            recent = await self.client.get_incoming(
+                phone, since=(drafted - timedelta(minutes=2)).isoformat(), limit=5
+            )
+        except Exception:
+            return False
+        for m in recent:
+            if not await self.state.is_reply_processed(f"wa:{m.id}"):
+                return True
+        return False
 
     async def _still_waiting(self, item: dict) -> bool:
         """A nudge only makes sense while our message is still the last word."""

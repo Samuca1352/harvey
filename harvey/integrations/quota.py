@@ -26,6 +26,12 @@ USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 OAUTH_BETA_HEADER = "oauth-2025-04-20"
 CACHE_TTL_OK = 300.0     # seconds to reuse a good response
 CACHE_TTL_FAIL = 60.0    # seconds to back off after a failure
+# The endpoint rate-limits hard (429), and Claude Code polls it with the same
+# token. One reading on disk is shared by Harvey, the dashboard and the CLI and
+# survives restarts; when a fetch fails, a reading up to STALE_OK old stands in
+# rather than dropping to the much stricter call counter.
+SHARED_CACHE = Path(__file__).resolve().parents[2] / "data" / "quota_cache.json"
+STALE_OK = 1800.0
 REQUEST_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
 
 # macOS keychain item Claude Code stores credentials under.
@@ -134,7 +140,8 @@ def _parse_window(value) -> Optional[dict]:
 class QuotaClient:
     """Cached reader of Claude subscription utilization."""
 
-    def __init__(self):
+    def __init__(self, cache_path: Optional[Path] = SHARED_CACHE):
+        self._cache_path = cache_path
         self._cache: Optional[dict] = None
         self._cache_at = 0.0
         self._cache_ttl = 0.0
@@ -152,11 +159,39 @@ class QuotaClient:
             if self._cache_at and now - self._cache_at < self._cache_ttl:
                 return self._cache
 
-            result = await self._fetch()
+            saved, age = self._read_saved()
+            if saved and age < CACHE_TTL_OK:
+                result = saved                  # another process just read it
+            else:
+                result = await self._fetch()
+                if result:
+                    self._save(result)
+                elif saved and age < STALE_OK:
+                    logger.debug(f"Quota: fetch failed; using the reading from {age:.0f}s ago.")
+                    result = saved
             self._cache = result
             self._cache_at = now
             self._cache_ttl = CACHE_TTL_OK if result else CACHE_TTL_FAIL
             return result
+
+    def _read_saved(self) -> tuple[Optional[dict], float]:
+        if not self._cache_path:
+            return None, 0.0
+        try:
+            saved = json.loads(self._cache_path.read_text())
+            return saved["windows"], time.time() - float(saved["at"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return None, 0.0
+
+    def _save(self, windows: dict):
+        if not self._cache_path:
+            return
+        try:
+            tmp = self._cache_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"at": time.time(), "windows": windows}))
+            tmp.replace(self._cache_path)
+        except OSError as e:
+            logger.debug(f"Quota: couldn't save the reading: {e}")
 
     async def _fetch(self) -> Optional[dict]:
         token = await asyncio.get_event_loop().run_in_executor(None, get_oauth_token)

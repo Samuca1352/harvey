@@ -39,6 +39,7 @@ icp:
     - "moda infantil"
     - "boutique"
     - "loja de presentes"
+    - "pet shop"
   company_size: "1-20 funcionários"
   titles:
     - "Proprietário"
@@ -65,8 +66,10 @@ channels:
     max_daily_messages: 10
   whatsapp:
     enabled: true               # needs WA_AKG_* in .env (check: harvey whatsapp test); holds quietly until then
-    max_daily_sends: 50         # mensagens frias por dia (respostas não contam)
-    ramp_start_sends: 0          # sem rampa: 50 por dia desde já
+    max_daily_sends: 30         # teto de frias por dia. Restrição de 24h em 21/10: voltar devagar (+10 a cada 3-4 dias sem problema)
+    max_daily_unanswered: 15    # para no dia quando 15 das frias de hoje estão sem resposta; resposta libera vaga
+    cold_paused_until: "2026-10-23T09:00"   # nenhuma fria antes disso (restrição até ~17:30 de 22/10); respostas seguem
+    ramp_start_sends: 0          # sem rampa
     require_approval: false     # autopilot: envia e responde sem aprovação
     default_country_code: "55"
     persona_name: "Rafael"        # como o assistente se apresenta no WhatsApp

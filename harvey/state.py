@@ -911,6 +911,30 @@ class StateManager:
             async with db.execute(sql, params) as cursor:
                 return [dict(r) for r in await cursor.fetchall()]
 
+    async def get_recent_whatsapp_openers(self, limit: int = 40) -> list[tuple[str, str]]:
+        """(body, company) of the latest first messages, sent or waiting."""
+        async with self._connect() as db:
+            async with db.execute(
+                "SELECT o.body, COALESCE(p.company, '') FROM outbox o "
+                "LEFT JOIN prospects p ON p.id = o.prospect_id "
+                "WHERE o.channel = 'whatsapp' AND o.kind = 'sequence' "
+                "AND o.status IN ('sent', 'approved', 'pending_review') "
+                "ORDER BY o.created_at DESC LIMIT ?",
+                (int(limit),),
+            ) as cursor:
+                return [(r[0] or "", r[1]) for r in await cursor.fetchall()]
+
+    async def get_first_sent_whatsapp(self, prospect_id: str) -> str:
+        """The cold message that opened a WhatsApp conversation, "" if none."""
+        async with self._connect() as db:
+            async with db.execute(
+                "SELECT body FROM outbox WHERE prospect_id = ? AND channel = 'whatsapp' "
+                "AND kind = 'sequence' AND status = 'sent' ORDER BY sent_at LIMIT 1",
+                (prospect_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+        return row[0] if row else ""
+
     async def get_outbox_for_conversation(self, convo_id: str, kind: str) -> list[dict]:
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
@@ -1000,6 +1024,21 @@ class StateManager:
             params.append(kind)
         async with self._connect() as db:
             async with db.execute(sql, params) as cursor:
+                return (await cursor.fetchone())[0]
+
+    async def count_whatsapp_unanswered_today(self) -> int:
+        """Cold WhatsApp messages sent today whose prospect hasn't written back
+        today. An opt-out is not an answer."""
+        async with self._connect() as db:
+            async with db.execute(
+                """SELECT COUNT(*) FROM outbox o
+                   WHERE o.channel = 'whatsapp' AND o.kind = 'sequence' AND o.status = 'sent'
+                     AND date(o.sent_at) = date('now')
+                     AND NOT EXISTS (
+                         SELECT 1 FROM conversations c JOIN prospects p ON p.id = c.prospect_id
+                         WHERE c.prospect_id = o.prospect_id AND c.channel = 'whatsapp'
+                           AND date(c.created_at) = date('now') AND p.status != 'opted_out')""",
+            ) as cursor:
                 return (await cursor.fetchone())[0]
 
     # ── WhatsApp helpers ──

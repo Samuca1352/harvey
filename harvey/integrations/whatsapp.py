@@ -7,6 +7,9 @@ with an API-key header. Harvey uses four calls:
 - ``POST /api/chat/{session}/check``            does this number have WhatsApp?
 - ``POST /api/messages/{session}/{jid}/send``   send a text message
 - ``GET  /api/messages/{session}/search?jid=``  read what a contact wrote back
+- ``PUT  /api/chat/{session}/{jid}/read``        blue ticks on what we read
+- ``GET  /api/media/{session}-{keyId}.{ext}``    a received voice note
+- ``GET  /api/chat/{session}/{jid}/presence``    is the contact typing?
 
 Replies are polled rather than pushed: WA-AKG only delivers webhooks to
 public HTTPS URLs (it blocks private and plain-HTTP targets), which a
@@ -15,6 +18,7 @@ locally-running Harvey is not.
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -25,6 +29,9 @@ logger = logging.getLogger("harvey.whatsapp")
 
 TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
 JID_SUFFIX = "@s.whatsapp.net"
+# A "typing..." WhatsApp never cleared (app closed mid-sentence) stops
+# counting after this long.
+TYPING_FRESH_SECONDS = 60
 
 # Brazilian numbers: 55 + 2-digit area code + 9 digits for a mobile (starting
 # with 9) or 8 digits for a landline (starting 2-5). Landlines can't hold a
@@ -220,6 +227,58 @@ class WhatsAppClient:
             False, error=f"{r.status_code}: {detail}", retryable=offline,
         )
 
+    async def download_audio(self, message_id: str) -> bytes:
+        """A received audio's bytes, b"" if the gateway doesn't have it.
+
+        WA-AKG saves media as <session>-<keyId>.<ext from the mimetype>; voice
+        notes are ogg, forwarded audio files can be mpeg or mp4. (Its
+        /download/{id}/media route can't be used: it compares the session's
+        internal id with its name and always answers 403.)
+        """
+        safe_session = re.sub(r"[^A-Za-z0-9_-]", "", self.session_id)
+        safe_id = re.sub(r"[^A-Za-z0-9_-]", "", message_id)
+        try:
+            async with self._client() as c:
+                for ext in ("ogg", "mpeg", "mp4"):
+                    r = await c.get(self._path("media", f"{safe_session}-{safe_id}.{ext}"))
+                    if r.status_code == 200 and r.content:
+                        return r.content
+        except httpx.HTTPError as e:
+            logger.warning(f"WhatsApp: audio download failed: {e}")
+        return b""
+
+    async def mark_read(self, phone: str, message_ids: list[str]) -> bool:
+        """Blue ticks on the contact's messages. False if the gateway refused."""
+        try:
+            async with self._client() as c:
+                r = await c.put(
+                    self._path("chat", self.session_id, to_jid(phone), "read"),
+                    json={"messageIds": message_ids},
+                )
+            return r.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    async def is_typing(self, phone: str) -> bool:
+        """True while the contact is typing or recording a voice note.
+
+        Needs the presence GET route of our patched WA-AKG; an older gateway,
+        or a contact who hides it, reads as not typing.
+        """
+        try:
+            async with self._client() as c:
+                r = await c.get(self._path("chat", self.session_id, to_jid(phone), "presence"))
+            if r.status_code != 200:
+                return False
+            data = (r.json() or {}).get("data") or {}
+        except (httpx.HTTPError, ValueError):
+            return False
+        age = data.get("ageSeconds")
+        return (
+            data.get("presence") in ("composing", "recording")
+            and isinstance(age, (int, float)) and age <= TYPING_FRESH_SECONDS
+        )
+
     async def get_incoming(self, phone: str, since: str = "", limit: int = 30) -> list[WaInbound]:
         """Messages the contact sent us, oldest first, newer than ``since``."""
         async with self._client() as c:
@@ -257,6 +316,48 @@ def _parse_ts(value) -> datetime | None:
     except ValueError:
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+# Outbox subject that marks the first message to a contact a shop shared with
+# us: it jumps the cold queue and goes out from the fast watcher too.
+HANDOFF_SUBJECT = "contato compartilhado"
+
+# Words a contact is saved under that aren't a name ("RENAN AMOR", "Mãe").
+_NOT_A_NAME = {
+    "amor", "mor", "meu", "minha", "vida", "bebe", "bb", "mozao", "mozinho", "gato", "gata",
+    "love", "lindo", "linda", "querido", "querida", "esposo", "esposa", "marido", "mulher",
+    "namorado", "namorada", "noivo", "noiva", "pai", "mae", "papai", "mamae", "irmao", "irma",
+    "filho", "filha", "tio", "tia", "vo", "socio", "socia", "dono", "dona", "loja", "gerente",
+    "financeiro", "comercial", "vendas", "atendimento", "whatsapp", "zap", "celular", "cel",
+    "novo", "nova", "pessoal", "trabalho", "casa", "oficial", "sr", "sra", "dr", "dra",
+}
+
+
+def _fold(word: str) -> str:
+    return unicodedata.normalize("NFKD", word).encode("ascii", "ignore").decode().lower()
+
+
+def parse_contact_cards(body: str) -> list[tuple[str, str]]:
+    """A CONTACT message's content ("Name | 5517..." per card, from our
+    patched gateway) -> [(name, digits)]; digits is "" when the card had none."""
+    cards = []
+    for line in (body or "").splitlines():
+        name, *numbers = [part.strip() for part in line.split("|")]
+        digits = next((d for d in (re.sub(r"\D", "", n) for n in numbers) if d), "")
+        if name or digits:
+            cards.append((name, digits))
+    return cards
+
+
+def contact_first_name(display: str, store: str) -> str:
+    """The first word of a saved contact name that is a name: not part of the
+    store's name, not a pet name or a role. "" when there is none."""
+    store_words = {_fold(w) for w in re.findall(r"\w+", store or "")}
+    for word in re.findall(r"[^\W\d_]+", display or ""):
+        folded = _fold(word)
+        if len(folded) >= 2 and folded not in store_words and folded not in _NOT_A_NAME:
+            return word.capitalize()
+    return ""
 
 
 def get_whatsapp_client(config, env) -> WhatsAppClient | None:

@@ -132,6 +132,11 @@ class WhatsAppChannelConfig(BaseModel):
     # Cold first messages per day. Replies to people who wrote back are not
     # counted against this.
     max_daily_sends: int = 25
+    # Stop for the day once this many of today's cold messages are still
+    # unanswered, even below max_daily_sends: a reply frees a slot, silence and
+    # opt-outs don't. Only a person's reply counts (shop bots are filtered out
+    # before a conversation exists). 0 = off, max_daily_sends alone.
+    max_daily_unanswered: int = 0
     # Warm the number up toward max_daily_sends instead of jumping to it: the
     # cap on day N after the first cold message is ramp_start_sends + N *
     # ramp_step_sends, never above max_daily_sends. 0 = no ramp.
@@ -155,6 +160,9 @@ class WhatsAppChannelConfig(BaseModel):
     # short question about their shop) and compare reply rates with
     # `harvey whatsapp stats`. False = always A.
     opener_test: bool = True
+    # No cold messages before this local time ("2026-10-23T08:00"), e.g. while
+    # WhatsApp has the number restricted. Replies still go out. "" = no pause.
+    cold_paused_until: str = ""
     # Seconds to wait between two sends, picked at random in this range.
     min_gap_seconds: int = 30
     max_gap_seconds: int = 90

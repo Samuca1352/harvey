@@ -13,3 +13,5 @@ pydantic>=2.5,<3
 pytz>=2024.1
 fastapi>=0.115,<1
 uvicorn>=0.34,<1
+faster-whisper>=1.2.1,<2     # WhatsApp voice notes → text, locally
+av>=11,<16                   # faster-whisper 1.2 breaks on PyAV 16+

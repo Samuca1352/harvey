@@ -298,9 +298,12 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                 logger.info(
                     f"{brain.provider_label} usage limit reached "
                     f"({config.usage.max_daily_claude_percent}% of quota or "
-                    f"{max_calls} calls). Sleeping 1h, then re-checking."
+                    f"{max_calls} calls). Re-checking in "
+                    f"{config.usage.heartbeat_interval_minutes} minutes."
                 )
-                if await _interruptible_sleep(3600, stop_event):
+                # One cycle, not an hour: an unreadable quota (a passing
+                # network blip) falls back to the call counter and lands here.
+                if await _interruptible_sleep(interval, stop_event):
                     break
                 continue
 

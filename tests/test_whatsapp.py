@@ -14,7 +14,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from harvey.agents.handler import Handler, wants_opt_out_pt
+from harvey.agents.handler import DEMO_REQUEST_RE, Handler, is_auto_message, wants_opt_out_pt
 from harvey.agents.sender import Sender
 from harvey.agents.whatsapp import WhatsAppAgent
 from harvey.collectors import discover as D
@@ -23,9 +23,13 @@ from harvey.gate import pre_send_check_whatsapp
 from harvey.integrations.whatsapp import (
     WaInbound,
     WaSendResult,
+    HANDOFF_SUBJECT,
     WhatsAppClient,
+    _parse_ts,
+    contact_first_name,
     is_mobile,
     normalize_phone,
+    parse_contact_cards,
 )
 from harvey.models import Company
 from harvey.models.prospect import Prospect
@@ -208,9 +212,20 @@ class FakeBrain:
     def load_prompt(self, *_a, **_k):
         return "PROMPT"
 
+    # Later drafts differ: the writer rejects an opener too close to a recent one.
+    OTHERS = (
+        "Boa tarde! Rafael aqui, da Prospect Boost. O que mais sai na loja de vocês hoje?",
+        "Opa, tudo certo? Sou o Rafael. Como os clientes costumam fazer pedido aí: Instagram ou balcão?",
+        "Olá! Vi que vocês trabalham com roupa em Votuporanga. Quem cuida das vendas pelo celular?",
+        "E aí, tudo bom? Rafael, da Prospect Boost. Muita gente pergunta preço por mensagem pra vocês?",
+        "Como vai? Pergunta rápida: quando chega coleção nova, como vocês avisam a clientela?",
+    )
+
     async def think_json(self, prompt, **_k):
         self.calls += 1
-        return {"body": self.draft} if self.draft else None
+        if not self.draft:
+            return None
+        return {"body": self.draft if self.calls == 1 else self.OTHERS[(self.calls - 2) % len(self.OTHERS)]}
 
     async def think(self, prompt, **_k):
         return self.draft
@@ -227,6 +242,8 @@ class FakeWa:
         self.has_whatsapp = True
         self.result = WaSendResult(True, message_id="WA1")
         self.inbound: dict[str, list[WaInbound]] = {}
+        self.read: list[tuple[str, list[str]]] = []
+        self.typing = False
 
     def is_configured(self):
         return True
@@ -249,6 +266,16 @@ class FakeWa:
 
     async def get_incoming(self, phone, since="", limit=30):
         return self.inbound.get(phone, [])
+
+    async def mark_read(self, phone, message_ids):
+        self.read.append((phone, message_ids))
+        return True
+
+    async def download_audio(self, message_id):
+        return b""
+
+    async def is_typing(self, phone):
+        return self.typing
 
     status = "CONNECTED"
     starts = 0
@@ -336,6 +363,7 @@ async def test_write_autopilot_and_no_opt_out_line(state):
 @pytest.mark.asyncio
 async def test_write_retries_a_draft_the_gate_rejects_then_gives_up(state):
     brain = FakeBrain(draft="Clique aqui para comprar agora")
+    brain.OTHERS = (brain.draft,)                 # every retry just as bad
     agent = make_agent(state, brain)
     await seed_company(state)
     await agent.prepare()
@@ -449,6 +477,29 @@ async def test_daily_cap_applies_to_cold_messages_only(state):
 
 
 @pytest.mark.asyncio
+async def test_a_reply_frees_a_slot_under_the_unanswered_cap(state):
+    from harvey.models.conversation import Conversation, Message
+    agent = make_agent(state, require_approval=False, max_daily_sends=10, max_daily_unanswered=1)
+    for i in range(3):
+        await seed_company(state, f"Loja {i}", f"(11) 9123{i}-5678", ext=f"gmaps:{i}")
+    await agent.prepare()
+    await agent.write()
+    await agent.send()
+    assert len(agent.client.sent) == 1                       # one unanswered: stop
+
+    first = (await state.get_prospects_by_status("contacted"))[0]
+    await state.update_prospect_status(first.id, "opted_out")
+    await state.add_conversation(Conversation(id="", prospect_id=first.id, channel="whatsapp",
+                                              thread=[Message(sender="prospect", content="SAIR")]))
+    await agent.send()
+    assert len(agent.client.sent) == 1                       # an opt-out is not an answer
+
+    await state.update_prospect_status(first.id, "replied")
+    await agent.send()
+    assert len(agent.client.sent) == 2                       # a real answer frees the slot
+
+
+@pytest.mark.asyncio
 async def test_email_sender_ignores_whatsapp_rows(state):
     agent = await staged_agent(state)
 
@@ -515,6 +566,7 @@ async def test_reply_is_answered_through_the_whatsapp_outbox(state):
     convo = (await state.get_conversations_by_status("open"))[0]
     assert convo.channel == "whatsapp"
     assert [m.content for m in convo.thread][0] == "Oi!\nQuanto custa?"   # two messages, one answer
+    assert handler.wa.read == [("5511912345678", ["M0", "M1"])]          # blue ticks
 
     # the same messages are never handled twice
     await handler.run()
@@ -551,6 +603,184 @@ async def test_media_only_reply_is_escalated(state):
     await handler.run()
     assert len(await state.get_conversations_by_status("needs_human")) == 1
     assert [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"] == []
+
+
+@pytest.mark.asyncio
+async def test_client_is_typing_reads_fresh_presence_only():
+    def make(presence, age=3, status=200):
+        def handler(request):
+            assert request.method == "GET"
+            assert request.url.path == "/api/chat/s1/5511912345678@s.whatsapp.net/presence"
+            return httpx.Response(status, json={"status": True, "data": {"presence": presence, "ageSeconds": age}})
+        return handler
+
+    assert await _client(make("composing")).is_typing("5511912345678")
+    assert await _client(make("recording")).is_typing("5511912345678")
+    assert not await _client(make("paused")).is_typing("5511912345678")
+    assert not await _client(make("unknown", age=None)).is_typing("5511912345678")
+    assert not await _client(make("composing", age=600)).is_typing("5511912345678")   # never cleared
+    assert not await _client(make("composing", status=404)).is_typing("5511912345678")  # old gateway
+
+
+def _at(iso: str, seconds: float) -> str:
+    return (_parse_ts(iso) + timedelta(seconds=seconds)).isoformat()
+
+
+def test_shop_bots_are_told_apart_from_people():
+    first = "2026-10-21T17:00:00+00:00"
+    greeting = "Havaianas Votuporanga, como podemos ajudar?"
+    assert is_auto_message(greeting, _at(first, 4), first)              # fired by our message
+    assert not is_auto_message(greeting, _at(first, 3600), first)       # an hour later: a person
+    assert is_auto_message("Olá! No momento não estamos disponíveis, retornaremos em breve.",
+                           _at(first, 3600), first)                     # away message, any time
+    assert not is_auto_message("Boa tarde! Pode me explicar sim", _at(first, 4), first)
+
+
+def test_demo_alert_ignores_a_yes_to_being_shown():
+    assert not DEMO_REQUEST_RE.search("Aqui é a Renata, sócia proprietária da loja, pode me mostrar sim.")
+    assert DEMO_REQUEST_RE.search("tem algum vídeo?")
+    assert DEMO_REQUEST_RE.search("tem uma loja pronta pra eu ver?")
+
+
+@pytest.mark.asyncio
+async def test_shop_bot_greeting_is_not_answered(state):
+    await contacted_prospect(state)
+    first = (await state.get_recent_whatsapp_contacts(3))[0]["first_sent_at"]
+    handler = make_handler(state, intent="question")
+    handler.wa.inbound["5511912345678"] = [WaInbound(
+        id="G1", phone="5511912345678", body="Havaianas Votuporanga, como podemos ajudar?",
+        timestamp=_at(first, 2))]
+    await handler.run()
+    assert [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"] == []
+    assert await state.get_conversations_by_status("open") == []
+    assert await state.is_reply_processed("wa:G1")
+
+
+@pytest.mark.asyncio
+async def test_no_answer_while_the_customer_is_still_typing(state):
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="question")
+    handler.wa.inbound["5511912345678"] = inbound("Oi!")
+    handler.wa.typing = True
+    await handler.run()
+    assert [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"] == []
+    assert not await state.is_reply_processed("wa:M0")              # read again next pass
+
+    handler.wa.inbound["5511912345678"] = inbound("Oi!", "Quanto custa?")
+    handler.wa.typing = False
+    await handler.run()
+    convo = (await state.get_conversations_by_status("open"))[0]
+    assert convo.thread[0].content == "Oi!\nQuanto custa?"          # one answer to both
+
+
+@pytest.mark.asyncio
+async def test_a_message_that_just_arrived_waits_for_the_next_one(state):
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="question")
+    handler.wa.inbound["5511912345678"] = [WaInbound(
+        id="N1", phone="5511912345678", body="Oi!",
+        timestamp=datetime.now(timezone.utc).isoformat())]
+    await handler.run()
+    assert not await state.is_reply_processed("wa:N1")
+
+
+@pytest.mark.asyncio
+async def test_reply_is_held_while_the_customer_types_or_wrote_again(state):
+    agent = await staged_agent(state)
+    prospect = (await state.get_prospects_by_status("queued"))[0]
+    await state.add_outbox_item(
+        prospect_id=prospect.id, to_email=prospect.phone, subject="", body="Claro, te explico.",
+        send_at=_now_iso(), status="approved", channel="whatsapp", kind="reply", provider="wa-akg",
+    )
+    async def not_yet():
+        return False
+    agent.cold_due = not_yet                                # only the reply is in play
+    agent.client.typing = True
+    await agent.send(replies_only=True)
+    assert agent.client.sent == []
+
+    agent.client.typing = False
+    agent.client.inbound[prospect.phone] = [WaInbound(
+        id="LATE", phone=prospect.phone, body="ah, e vende roupa infantil?",
+        timestamp=datetime.now(timezone.utc).isoformat())]
+    await agent.send(replies_only=True)
+    assert agent.client.sent == []                                  # the handler redrafts
+
+    await state.mark_reply_processed("wa:LATE")
+    await agent.send(replies_only=True)
+    assert [t for _, t in agent.client.sent] == ["Claro, te explico."]
+
+
+def test_contact_cards_give_a_number_and_a_usable_first_name():
+    assert parse_contact_cards("BARBIERI JOIAS RENAN AMOR | 5517988887777") == [
+        ("BARBIERI JOIAS RENAN AMOR", "5517988887777")]
+    assert parse_contact_cards("Ana\nBeto | 5511912345678") == [("Ana", ""), ("Beto", "5511912345678")]
+    assert contact_first_name("BARBIERI JOIAS RENAN AMOR", "Barbieri Joias") == "Renan"
+    assert contact_first_name("Mãe ❤️", "Loja da Maria") == ""
+    assert contact_first_name("Amor", "Loja") == ""
+
+
+@pytest.mark.asyncio
+async def test_a_shared_contact_gets_a_warm_first_message(state):
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state, intent="wrong_person")
+    handler.wa_cfg.notify_phone = "5517997191017"
+    handler.wa.inbound["5511912345678"] = [
+        WaInbound(id="C1", phone="5511912345678", body="LOJA DA MARIA RENAN AMOR | 5517988887777",
+                  type="CONTACT", timestamp="2026-10-20T12:00:00Z"),
+        WaInbound(id="C2", phone="5511912345678", body="Oi chama este contato, por favor",
+                  timestamp="2026-10-20T12:00:10Z"),
+    ]
+    await handler.run()
+
+    renan = await state.get_prospect_by_phone("5517988887777")
+    assert renan and renan.first_name == "Renan" and renan.company == prospect.company
+    first = [i for i in await state.get_outbox(channel="whatsapp") if i["prospect_id"] == renan.id]
+    assert len(first) == 1 and first[0]["subject"] == HANDOFF_SUBJECT and first[0]["kind"] == "sequence"
+    assert any("Loja passou outro contato" in t and "+5517988887777" in t
+               for p, t in handler.wa.sent if p == "5517997191017")
+    convo = (await state.get_conversations_by_status("open"))[0]
+    assert "Você vai chamar Renan agora" in convo.thread[0].content and "AMOR" not in convo.thread[0].content
+
+    # the same card again: no second prospect, no second message
+    handler.wa.inbound["5511912345678"].append(WaInbound(
+        id="C3", phone="5511912345678", body="LOJA DA MARIA RENAN AMOR | 5517988887777",
+        type="CONTACT", timestamp="2026-10-20T12:05:00Z"))
+    await handler.run()
+    assert len([i for i in await state.get_outbox(channel="whatsapp") if i["prospect_id"] == renan.id]) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_card_without_a_number_asks_for_it(state):
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="wrong_person")
+    handler.wa.inbound["5511912345678"] = [WaInbound(
+        id="C1", phone="5511912345678", body="Renan", type="CONTACT", timestamp="2026-10-20T12:00:00Z")]
+    await handler.run()
+    convo = (await state.get_conversations_by_status("open"))[0]
+    assert "peça o número" in convo.thread[0].content
+
+
+@pytest.mark.asyncio
+async def test_shared_contact_message_goes_out_first_even_from_the_fast_watcher(state):
+    agent = await staged_agent(state)                       # one approved COLD message
+    renan = Prospect(first_name="Renan", company="Loja da Maria", phone="5517988887777",
+                     source="whatsapp:contato_compartilhado", status="queued")
+    renan.id = await state.add_prospect(renan)
+    await state.add_outbox_item(
+        prospect_id=renan.id, to_email="5517988887777", subject=HANDOFF_SUBJECT,
+        body="Oi, Renan! Aqui é o Rafael. Falei com a Loja da Maria e me passaram seu contato.",
+        send_at=_now_iso(), status="approved", channel="whatsapp", kind="sequence", provider="wa-akg",
+    )
+    async def not_yet():
+        return False
+    agent.cold_due = not_yet
+    agent.cfg.cold_paused_until = "2999-01-01T08:00"
+    await agent.send(replies_only=True)
+    assert agent.client.sent == []                                    # restricted: nobody new
+    agent.cfg.cold_paused_until = ""
+    await agent.send(replies_only=True)
+    assert [p for p, _ in agent.client.sent] == ["5517988887777"]     # cold one still waits
 
 
 def test_opt_out_matching_is_word_based():
@@ -676,8 +906,12 @@ async def test_excluded_industries_are_never_messaged(state):
 
 
 @pytest.mark.asyncio
-async def test_replies_only_mode_never_starts_a_conversation(state):
+async def test_a_cold_message_waits_for_its_turn_but_a_reply_does_not(state):
     agent = await staged_agent(state)                       # one approved COLD message
+
+    async def not_yet():
+        return False
+    agent.cold_due = not_yet
     await agent.send(replies_only=True)
     assert agent.client.sent == []
     assert (await state.get_outbox(channel="whatsapp"))[0]["status"] == "approved"
@@ -689,6 +923,24 @@ async def test_replies_only_mode_never_starts_a_conversation(state):
     )
     await agent.send(replies_only=True)
     assert [t for _, t in agent.client.sent] == ["Claro, te explico."]
+
+
+@pytest.mark.asyncio
+async def test_cold_schedule_is_random_and_honours_a_pause(state, monkeypatch):
+    import harvey.agents.whatsapp as W
+    import harvey.main as M
+    monkeypatch.setattr(M, "in_quiet_hours", lambda config: False)
+    agent = make_agent(state)
+    agent.send_pacing = True
+
+    assert not await agent.cold_due()                       # no schedule yet: set one ahead
+    ahead = datetime.fromisoformat(await state.get_setting(W.NEXT_COLD_KEY))
+    assert 100 < (ahead - W._now()).total_seconds() < 1600
+    await state.set_setting(W.NEXT_COLD_KEY, (W._now() - timedelta(seconds=5)).isoformat())
+    assert await agent.cold_due()
+
+    agent.cfg.cold_paused_until = "2999-01-01T08:00"
+    assert not await agent.cold_due()
 
 
 @pytest.mark.asyncio
@@ -737,6 +989,28 @@ async def test_no_alert_without_a_notify_number(state):
     assert handler.wa.sent == []
 
 
+@pytest.mark.asyncio
+async def test_owner_is_alerted_when_harvey_promises_a_designer(state):
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="interested")
+    handler.brain._reply = "Combinado! Vou pedir para um dos nossos designers te mandar um exemplo."
+    handler.wa_cfg.notify_phone = "5517997191017"
+    handler.wa.inbound["5511912345678"] = inbound("pode mostra sim")     # no demo words
+    await handler.run()
+    assert any("pediu vídeo ou exemplo" in t for p, t in handler.wa.sent if p == "5517997191017")
+
+
+@pytest.mark.asyncio
+async def test_reply_prompt_includes_the_cold_opener(state):
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state, intent="question")
+    handler.brain = RecordingBrain()
+    handler.wa.inbound["5511912345678"] = inbound("ola boa tarde")
+    await handler.run()
+    opener = await state.get_first_sent_whatsapp(prospect.id)
+    assert opener and opener in handler.brain.last
+
+
 def test_closing_is_not_triggered_by_ordinary_agreement():
     h = make_handler(None)
     stage = lambda text: h._determine_stage("interested", "engaged", text.lower())
@@ -746,6 +1020,7 @@ def test_closing_is_not_triggered_by_ordinary_agreement():
     assert stage("quero testar") == "closing"
     assert stage("pode ser amanhã às 10h") == "closing"
     assert stage("vamos agendar uma reunião") == "closing"
+    assert h._determine_stage("interested", "negotiating", "postamos sim") == "negotiating"
 
 
 class RecordingBrain(ReplyBrain):
@@ -865,7 +1140,30 @@ async def test_pro_plan_is_due_after_a_few_turns_without_a_mention(state):
     thread.append(Message(sender="prospect", content="como mudo preço?"))
     await handler._generate_whatsapp_response("question", "como mudo preço?", prospect,
                                               Conversation(id="c", prospect_id="p", channel="whatsapp", thread=thread))
-    assert "Não force" in handler.brain.prompts[0][1]["pro_instruction"]
+    assert "AGORA é a hora do Pro" in handler.brain.prompts[0][1]["pro_instruction"]
+
+
+@pytest.mark.asyncio
+async def test_talk_of_posting_brings_up_the_pro(state):
+    from harvey.models.conversation import Conversation, Message
+    handler = make_handler(state)
+    prospect = Prospect(first_name="E", last_name="x", title="t", company="Loja", phone="5511912345678")
+
+    async def instruction(thread, text):
+        handler.brain = RecordingBrain()
+        await handler._generate_whatsapp_response(
+            "interested", text, prospect,
+            Conversation(id="c", prospect_id="p", channel="whatsapp",
+                         thread=thread + [Message(sender="prospect", content=text)]))
+        return handler.brain.prompts[0][1]["pro_instruction"]
+
+    one_turn = [Message(sender="harvey", content="A vitrine organiza os pedidos.")]
+    assert "Instagram" in await instruction(one_turn, "Postamos sim")        # first chance, early
+    assert await instruction(one_turn, "pode explicar") == ""               # too early otherwise
+    pitched = one_turn + [Message(sender="harvey", content="E no Pro vêm 2 artes por semana.")]
+    assert "outro ângulo" in await instruction(pitched, "a gente posta no insta")   # one retry
+    twice = pitched + [Message(sender="harvey", content="As artes do Pro poupam tempo.")]
+    assert await instruction(twice, "a gente posta no insta") == ""         # then let it go
 
 
 # ── night shift ──
@@ -981,7 +1279,7 @@ async def test_daily_cap_ramps_up_from_the_first_cold_send(state):
     assert await agent.daily_cap() == 30                      # ramp off
 
 
-def test_cold_messages_are_spread_over_the_day(state, monkeypatch):
+def test_cold_gaps_are_random_and_fill_the_day(state, monkeypatch):
     import harvey.agents.whatsapp as W
 
     class Morning(datetime):
@@ -991,9 +1289,37 @@ def test_cold_messages_are_spread_over_the_day(state, monkeypatch):
 
     monkeypatch.setattr(W, "datetime", Morning)
     agent = make_agent(state)
-    assert agent.cold_per_cycle(50) == 1       # ~50 cycles left in the window: one at a time
-    assert agent.cold_per_cycle(5) == 1
-    assert agent.cold_per_cycle(400) == 4      # never above the per-cycle ceiling
+    gaps = [agent.cold_gap_seconds(30) for _ in range(200)]     # 12h left, 30 to go: ~24 min
+    assert min(gaps) >= W.MIN_COLD_GAP_SECONDS
+    assert len({round(g) for g in gaps}) > 150                  # no fixed rhythm
+    assert 15 * 60 < sum(gaps) / len(gaps) < 45 * 60
+    assert all(g < 10 * 60 for g in (agent.cold_gap_seconds(10_000) for _ in range(50)))   # floor only
+
+
+@pytest.mark.asyncio
+async def test_an_opener_too_close_to_a_recent_one_is_redrafted(state):
+    twin = "Oi, tudo bem? Aqui é o Rafael da Prospect Boost. Vi a {} em Votuporanga. Como vocês vendem hoje?"
+
+    class Drafts(FakeBrain):
+        def __init__(self):
+            super().__init__()
+            self.drafts = [twin.format("Loja da Maria"),
+                           "Boa tarde! Rafael aqui. Vocês vendem mais na loja ou no Instagram?"]
+
+        async def think_json(self, prompt, **_k):
+            self.calls += 1
+            return {"body": self.drafts.pop(0)}
+
+    other = Prospect(company="Loja do Zé", phone="5511988887777", status="contacted")
+    other.id = await state.add_prospect(other)
+    await state.add_outbox_item(
+        prospect_id=other.id, to_email=other.phone, subject="", body=twin.format("Loja do Zé"),
+        send_at=_now_iso(), status="sent", channel="whatsapp", kind="sequence", provider="wa-akg",
+    )
+    brain = Drafts()
+    agent = make_agent(state, brain=brain)
+    body = await agent._draft(Prospect(company="Loja da Maria", phone="5511912345678"))
+    assert body.startswith("Boa tarde!") and brain.calls == 2
 
 
 @pytest.mark.asyncio
@@ -1162,3 +1488,72 @@ async def test_followup_is_dropped_if_the_customer_wrote_back(state):
     await agent.send()
     assert agent.client.sent == []
     assert (await followups(state))[0]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_harvey_stays_out_of_conversations_a_human_has(state):
+    from harvey.models.conversation import Conversation, Message
+    prospect = await contacted_prospect(state)
+    await state.add_conversation(Conversation(
+        id="", prospect_id=prospect.id, channel="whatsapp", status="needs_human",
+        thread=[Message(sender="prospect", content="manda um vídeo")],
+    ))
+    handler = make_handler(state, intent="question")
+    handler.wa.inbound["5511912345678"] = inbound("e aí?")
+    await handler.run()
+    assert [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"] == []
+    assert handler.wa.read == []
+
+
+@pytest.mark.asyncio
+async def test_voice_note_is_transcribed_and_answered(state, monkeypatch):
+    import harvey.agents.handler as handler_mod
+    async def fake_transcribe(audio, language="pt"):
+        return "tem algum vídeo de como funciona?" if audio == b"OggS" else ""
+    monkeypatch.setattr(handler_mod, "transcribe", fake_transcribe)
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state, intent="question")
+    handler.wa_cfg.notify_group = "120363428715949829@g.us"
+    async def download_audio(message_id):
+        return b"OggS"
+    handler.wa.download_audio = download_audio
+    handler.wa.inbound["5511912345678"] = [WaInbound(
+        id="A1", phone="5511912345678", body="", type="AUDIO", timestamp="2026-10-20T12:00:00Z")]
+    await handler.run()
+    convo = (await state.get_conversations_by_status("open"))[0]
+    assert convo.thread[0].content == "(áudio) tem algum vídeo de como funciona?"
+    assert len([i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"]) == 1
+    assert any("vídeo ou exemplo" in text for _, text in handler.wa.sent)   # owner alerted
+
+
+@pytest.mark.asyncio
+async def test_unheard_voice_note_next_to_text_goes_to_a_human(state, monkeypatch):
+    import harvey.agents.handler as handler_mod
+    async def deaf(audio, language="pt"):
+        return ""
+    monkeypatch.setattr(handler_mod, "transcribe", deaf)
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state, intent="not_interested")
+    async def download_audio(message_id):
+        return b""
+    handler.wa.download_audio = download_audio
+    handler.wa.inbound["5511912345678"] = inbound("já tenho isso") + [WaInbound(
+        id="A1", phone="5511912345678", body="", type="AUDIO", timestamp="2026-10-20T12:05:00Z")]
+    await handler.run()
+    assert (await state.get_conversations_by_status("needs_human"))[0].prospect_id == prospect.id
+
+
+@pytest.mark.asyncio
+async def test_empty_whatsapp_notice_is_not_a_reply(state):
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state, intent="question")
+    handler.wa.inbound["5511912345678"] = inbound("")       # "ativou mensagens temporárias"
+    await handler.run()
+    assert await state.get_conversations_by_status("needs_human") == []
+    assert await state.get_conversations_by_status("open") == []
+    assert (await state.get_prospect(prospect.id)).status == "contacted"
+
+    handler.wa.inbound["5511912345678"] = inbound("", "Oi, como funciona?")
+    await handler.run()
+    convo = (await state.get_conversations_by_status("open"))[0]
+    assert [m.content for m in convo.thread][0] == "Oi, como funciona?"

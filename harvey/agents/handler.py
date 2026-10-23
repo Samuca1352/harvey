@@ -18,8 +18,18 @@ from harvey.integrations.instantly import InstantlyClient
 from harvey.integrations.mail_provider import NATIVE_PROVIDERS, get_mail_provider
 from harvey.config import whatsapp_persona_name
 from harvey.gate import BANNED_PHRASES, WHATSAPP_BANNED_PHRASES, pre_send_check_whatsapp
-from harvey.integrations.whatsapp import WhatsAppClient
+from harvey.integrations.whatsapp import (
+    HANDOFF_SUBJECT,
+    WhatsAppClient,
+    _parse_ts,
+    contact_first_name,
+    is_mobile,
+    normalize_phone,
+    parse_contact_cards,
+)
+from harvey.transcribe import transcribe
 from harvey.models.conversation import Conversation, Message
+from harvey.models.prospect import Prospect
 from harvey.state import StateManager
 
 logger = logging.getLogger("harvey.handler")
@@ -113,10 +123,61 @@ OPT_OUT_WORDS_PT = (
 OPT_OUT_RE_PT = re.compile(r"\b(?:" + "|".join(OPT_OUT_WORDS_PT) + r")\b", re.IGNORECASE)
 
 # A customer whose focus is the art/design side: a designer should send the portfolio.
+# Asked to see it working: a person sends the demo video or an example store.
+# Not "me mostra": our opener offers to show, so "pode me mostrar sim" is a
+# yes to the explanation, not a request for a video.
+DEMO_REQUEST_RE = re.compile(
+    r"\bv[ií]deos?\b|exemplo|demonstra|alguma (loja|empresa)|loja (pronta|funcionando)",
+    re.IGNORECASE,
+)
+# Harvey's own reply promised that a designer will send something: the
+# promise is the trigger, whatever words the customer used.
+DESIGNER_PROMISE_RE = re.compile(r"\bdesigners?\b", re.IGNORECASE)
 ARTS_INTEREST_RE = re.compile(
     r"\bartes?\b|portf[oó]lio|\bdesign(er)?s?\b|identidade visual|\bbanner\b|\blogo(tipo)?\b|\bposts?\b",
     re.IGNORECASE,
 )
+
+# The shop's WhatsApp Business bot, not a person. Away messages are never a
+# person; a greeting ("como podemos ajudar?") only counts as the bot when it
+# lands right after our first message, which is what triggers it.
+AWAY_MESSAGE_RE = re.compile(
+    r"mensagem autom[aá]tica|resposta autom[aá]tica|fora do (hor[aá]rio|expediente)"
+    r"|hor[aá]rio de (atendimento|funcionamento)|em breve (retornaremos|responderemos|entraremos)"
+    r"|retornaremos (o mais|assim que|em breve)|no momento n[aã]o (estamos|podemos)",
+    re.IGNORECASE,
+)
+GREETING_RE = re.compile(
+    r"(como|em que) (podemos|posso) (te |lhe )?ajudar|bem[- ]vind[oa]"
+    r"|(obrigad[oa]|agradecemos) (por|pelo) (entrar em contato|seu contato|contato|sua mensagem)",
+    re.IGNORECASE,
+)
+GREETING_WINDOW = timedelta(minutes=3)
+# A shop sent us someone else's contact (usually who decides there).
+SHARED_CONTACT_SOURCE = "whatsapp:contato_compartilhado"
+HANDED_OFF_KEY = "wa_handed_off:"
+# Several messages in a row are one answer: wait this long after the last
+# one before answering, even when the gateway can't tell us they're typing.
+SETTLE_SECONDS = 20
+
+
+def is_auto_message(text: str, sent_at: str, first_sent_at: str) -> bool:
+    if AWAY_MESSAGE_RE.search(text):
+        return True
+    got, ours = _parse_ts(sent_at), _parse_ts(first_sent_at)
+    return bool(
+        GREETING_RE.search(text) and len(text.split()) <= 30
+        and got and ours and timedelta(0) <= got - ours <= GREETING_WINDOW
+    )
+
+
+# She mentioned posting or social media: where the Pro's weekly art helps.
+SOCIAL_RE = re.compile(
+    r"instagram|\binsta\b|\bposts?\b|\bpost(o|a|amos|ar|am)\b|\bstatus\b|stor(y|ies)"
+    r"|redes? socia|divulga|tiktok|facebook",
+    re.IGNORECASE,
+)
+
 
 # "SAIR" is the word our own opt-out line asks for, but "vou sair agora" is
 # not an opt-out: it only counts when it is nearly the whole message.
@@ -368,11 +429,14 @@ class Handler:
             )
         if convo.stage != old_stage:
             logger.info(f"Handler: Stage for {lead_email}: {old_stage} -> {convo.stage}")
-        if channel == "whatsapp" and intent in ("interested", "question", "objection"):
-            if convo.stage == "closing":
+        if channel == "whatsapp":
+            engaged = intent in ("interested", "question", "objection")
+            if engaged and convo.stage == "closing":
                 await self._notify_owner("meeting", prospect, convo)
-            if ARTS_INTEREST_RE.search(reply_text):
+            if engaged and ARTS_INTEREST_RE.search(reply_text):
                 await self._notify_owner("arts", prospect, convo)
+            if (engaged and DEMO_REQUEST_RE.search(reply_text)) or DESIGNER_PROMISE_RE.search(response):
+                await self._notify_owner("demo", prospect, convo)
 
         # 3. Route based on intent
         if intent == "unsubscribe":
@@ -541,9 +605,16 @@ class Handler:
         if not contacts:
             return True
 
+        # A human has these conversations: Harvey stays out, messages unread.
+        with_human = {
+            c.prospect_id for c in await self.state.get_conversations_by_status("needs_human")
+        }
+
         handled = 0
         complete = True
         for contact in contacts:
+            if contact["prospect_id"] in with_human:
+                continue
             try:
                 inbound = await self.wa.get_incoming(contact["phone"], since=contact["first_sent_at"])
             except Exception as e:
@@ -551,22 +622,63 @@ class Handler:
                 complete = False
                 continue
             fresh = [m for m in inbound if not await self.state.is_reply_processed(f"wa:{m.id}")]
+            # WhatsApp's own notices (e.g. "turned on disappearing messages")
+            # reach the gateway as empty texts. Nobody wrote them: skip them.
+            for m in [m for m in fresh if m.type == "TEXT" and not m.body]:
+                await self.state.mark_reply_processed(f"wa:{m.id}")
+            fresh = [m for m in fresh if m.body or m.type != "TEXT"]
+            # The shop's bot answered, not the owner: don't answer it, wait for a person.
+            bots = [m for m in fresh if is_auto_message(m.body, m.timestamp, contact["first_sent_at"])]
+            for m in bots:
+                await self.state.mark_reply_processed(f"wa:{m.id}")
+                logger.info(f"Handler: automatic message from {contact['phone']} ignored: {m.body[:60]!r}")
+                await self.state.log_action(
+                    action_type="whatsapp_auto_message", agent="handler",
+                    details={"prospect_phone": contact["phone"], "message": m.body[:200]},
+                )
+            fresh = [m for m in fresh if m not in bots]
             if not fresh:
+                continue
+            # Still typing or recording: answer the whole thought, not half of it.
+            # Left unprocessed, so the next pass reads these with what follows.
+            newest = _parse_ts(fresh[-1].timestamp)
+            if (newest and (datetime.now(timezone.utc) - newest).total_seconds() < SETTLE_SECONDS) \
+                    or await self.wa.is_typing(contact["phone"]):
                 continue
             prospect = await self.state.get_prospect(contact["prospect_id"])
             if prospect is None:
                 continue
+
+            # A shared contact card: Harvey messages that person, and the reply
+            # model reads what happened instead of the bare card.
+            for m in fresh:
+                if m.type == "CONTACT" and m.body:
+                    m.body = await self._shared_contact(prospect, m.body)
+
+            # Voice notes become text; one Harvey can't hear goes to a human,
+            # even next to typed messages (it may hold the actual question).
+            unheard = False
+            for m in fresh:
+                if m.type == "AUDIO" and not m.body:
+                    heard = await transcribe(await self.wa.download_audio(m.id))
+                    if heard:
+                        m.body = f"(áudio) {heard}"
+                        logger.info(f"Handler: transcribed a voice note from {contact['phone']}.")
+                    else:
+                        unheard = True
 
             # Several messages in a row are one answer, not three.
             text = "\n".join(m.body for m in fresh if m.body).strip()
             media_only = not text
             if media_only:
                 text = f"[mensagem de {fresh[-1].type.lower()}, sem texto]"
+            elif unheard:
+                text += "\n[áudio que não consegui ouvir]"
             consumed = True
             try:
                 await self._process_reply(
                     contact["phone"], text, reply_uuid="", prospect=prospect,
-                    channel="whatsapp", force_intent="escalate" if media_only else "",
+                    channel="whatsapp", force_intent="escalate" if media_only or unheard else "",
                 )
                 handled += 1
             except BrainUnavailable as e:
@@ -581,6 +693,9 @@ class Handler:
                 if consumed:
                     for m in fresh:
                         await self.state.mark_reply_processed(f"wa:{m.id}")
+                    # Seen, like a person would: a missing blue tick is harmless.
+                    if not await self.wa.mark_read(contact["phone"], [m.id for m in fresh]):
+                        logger.debug(f"Handler: couldn't mark {contact['phone']} as read.")
 
         if handled:
             logger.info(f"Handler: processed {handled} WhatsApp conversation(s).")
@@ -615,6 +730,8 @@ class Handler:
             prospect = await self.state.get_prospect(convo.prospect_id)
             if prospect is None or prospect.status in NO_FOLLOWUP_STATUSES:
                 continue
+            if await self.state.get_setting(f"{HANDED_OFF_KEY}{prospect.id}"):
+                continue                # they sent us to someone else: talk to them
             quiet = now - convo.thread[-1].timestamp
             if len(done) >= len(delays):
                 if quiet >= timedelta(hours=delays[-1]):
@@ -640,28 +757,39 @@ class Handler:
             f"{me if m.sender == 'harvey' else 'Cliente'}: {m.content}"
             for m in convo.thread[-10:]
         )
+        # The thread starts at the customer's first answer; without our opener
+        # the model introduces itself all over again.
+        opener = await self.state.get_first_sent_whatsapp(prospect.id)
+        if opener:
+            history = f"{me}: {opener}\n" + history
         handoffs = sum(
             1 for m in convo.thread
             if m.sender == "harvey" and re.search(r"\b(equipe|time|alguém|alguem)\b", m.content, re.I)
         )
         harvey_turns = sum(1 for m in convo.thread if m.sender == "harvey")
-        pro_mentioned = any(
-            m.sender == "harvey" and re.search(r"\bpro\b|\bartes?\b", m.content, re.I)
-            for m in convo.thread
+        pro_mentions = sum(
+            1 for m in convo.thread
+            if m.sender == "harvey" and re.search(r"\bpro\b|\bartes?\b", m.content, re.I)
         )
-        # The conversation has run for a while and the Pro plan hasn't come up:
-        # it's due now, once, tied to what the customer has said.
-        pro_instruction = (
-            "A conversa já andou e o Pro ainda não apareceu. Considere, com o seu julgamento: se a "
-            "pessoa está receptiva, descubra (com palavras suas, nunca decoradas) se manter o Instagram ou "
-            "os posts da loja toma o tempo dela: com uma pergunta, se a regra 1b deixar, ou com um "
-            "comentário que convida resposta, se não deixar. Se ela mostrar essa "
-            "dor, apresente o Pro. Se ela estiver gostando muito da vitrine, as artes entram como o "
-            "complemento que fecha o pacote. Se ela não mostrar interesse em artes, deixe para lá e "
-            "siga com o Básico e o teste. Não force."
-            if not pro_mentioned and harvey_turns >= 3 and intent in ("question", "interested")
-            else ""
-        )
+        # The Pro (weekly marketing art) is what we most want to sell. Bring
+        # it up early, and when she talks about posting it is the moment.
+        social = bool(SOCIAL_RE.search(reply_text or ""))
+        pro_instruction = ""
+        if intent in ("question", "interested", "objection"):
+            if pro_mentions == 0 and (social or harvey_turns >= 2):
+                pro_instruction = (
+                    "AGORA é a hora do Pro: "
+                    + ("ela acabou de falar de Instagram ou posts. " if social
+                       else "a conversa já andou e o Pro ainda não apareceu. ")
+                    + "Responda o que ela disse e apresente o Pro em uma frase, ligada ao que ela "
+                    "contou: além da vitrine, 2 artes por semana feitas sob medida para a loja, "
+                    "prontas para postar. Nesta mensagem não ofereça o teste."
+                )
+            elif pro_mentions == 1 and social:
+                pro_instruction = (
+                    "Ela voltou a falar de Instagram ou posts e você só citou as artes uma vez: "
+                    "retome agora, de outro ângulo, em meia frase (ex.: ganhar tempo com os posts)."
+                )
         harvey_msgs = [m for m in convo.thread if m.sender == "harvey"][-3:]
         # Questions in a row read as an interrogation; the prompt forbids a third.
         questions_recent = sum(1 for m in harvey_msgs[-2:] if "?" in m.content)
@@ -676,13 +804,11 @@ class Handler:
             product_name=self.config.product.name,
             product_description=self.config.product.description,
             pricing=self.config.product.pricing,
+            store_name=prospect.company,
             handoff_mentions=handoffs,
             trial_recent=trial_recent,
             questions_recent=questions_recent,
-            pro_mentions=sum(
-                1 for m in convo.thread
-                if m.sender == "harvey" and re.search(r"\bpro\b|\bartes?\b", m.content, re.I)
-            ),
+            pro_mentions=pro_mentions,
             harvey_turns=harvey_turns,
             pro_instruction=pro_instruction,
             banned_phrases=", ".join(
@@ -739,6 +865,116 @@ class Handler:
             )
         return ""  # still blocked: a human answers instead
 
+    async def _shared_contact(self, prospect, card_text: str) -> str:
+        """Message the person on a contact card a shop sent us, and return
+        what the reply model should read in place of the card."""
+        cards = parse_contact_cards(card_text)
+        for name, digits in cards:
+            phone = normalize_phone(digits, self.wa_cfg.default_country_code) if digits else ""
+            if not is_mobile(phone):
+                continue
+            first = contact_first_name(name, prospect.company)
+            who = first or "essa pessoa"
+            if phone == re.sub(r"\D", "", prospect.phone or ""):
+                return "(mandou o próprio contato)"
+            if not await self.state.get_prospect_by_phone(phone):
+                await self._message_shared_contact(prospect, phone, first)
+            return f"(mandou o cartão de contato de {who}, com o número. Você vai chamar {who} agora.)"
+        names = ", ".join(
+            contact_first_name(n, prospect.company) or "alguém" for n, _ in cards
+        ) or "alguém"
+        return f"(mandou o cartão de contato de {names}, mas sem número de celular: peça o número)"
+
+    async def _message_shared_contact(self, prospect, phone: str, first_name: str):
+        """Usually who decides at the same shop: a warm first message that
+        carries on the shop's conversation (prompts/whatsapp_handoff.md)."""
+        new = Prospect(
+            company_id=prospect.company_id, first_name=first_name, title="Responsável",
+            company=prospect.company, industry=prospect.industry, phone=phone,
+            source=SHARED_CONTACT_SOURCE, status="queued",
+            personalization_notes=f"Contato passado pela loja no WhatsApp (+{prospect.phone}).",
+        )
+        new.id = await self.state.add_prospect(new)
+        body = await self._draft_handoff(prospect, new)
+        if not body:
+            await self._owner_send(
+                f"Loja passou outro contato: {prospect.company}\n"
+                f"Novo contato: {first_name or 'sem nome'} +{phone}\n\n"
+                "Não consegui escrever a mensagem: chame você."
+            )
+            return
+        require_approval = self.wa_cfg.require_approval if self.wa_cfg else True
+        await self.state.add_outbox_item(
+            prospect_id=new.id, to_email=phone, subject=HANDOFF_SUBJECT, body=body,
+            send_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            status="pending_review" if require_approval else "approved",
+            provider="wa-akg", channel="whatsapp", kind="sequence",
+        )
+        await self.state.set_setting(f"{HANDED_OFF_KEY}{prospect.id}", phone)
+        await self.state.log_action(
+            action_type="whatsapp_shared_contact", agent="handler",
+            details={"company": prospect.company, "from": prospect.phone, "to": phone},
+        )
+        logger.info(f"Handler: {prospect.company} shared a contact; first message to {phone} queued.")
+        await self._owner_send(
+            f"Loja passou outro contato: {prospect.company}\n"
+            f"Quem passou: +{prospect.phone}\n"
+            f"Novo contato: {first_name or 'sem nome'} +{phone}\n\n"
+            f"Harvey vai chamar com: {body}"
+        )
+
+    async def _draft_handoff(self, prospect, new) -> str:
+        me = whatsapp_persona_name(self.config)
+        stored = next(
+            (c for c in await self.state.get_conversations_by_status("open")
+             if c.prospect_id == prospect.id), None,
+        )
+        lines = []
+        opener = await self.state.get_first_sent_whatsapp(prospect.id)
+        if opener:
+            lines.append(f"{me}: {opener}")
+        for m in (stored.thread[-8:] if stored else []):
+            lines.append(f"{me if m.sender == 'harvey' else 'Loja'}: {m.content}")
+        lines.append("Loja: (mandou o contato e pediu para você chamar essa pessoa)")
+        prompt = self.brain.load_prompt(
+            "whatsapp_handoff",
+            persona_name=me,
+            persona_company=self.config.persona.company,
+            product_name=self.config.product.name,
+            product_description=self.config.product.description,
+            store_name=prospect.company,
+            contact_name=new.first_name,
+            history="\n".join(lines),
+        )
+        if not prompt:
+            logger.error("Handler: prompts/whatsapp_handoff.md is missing or unreadable.")
+            return ""
+        feedback = ""
+        for _ in range(2):
+            result = await self.brain.think_json(
+                prompt + feedback, session_id="harvey-writer",
+                agent="handler", task="whatsapp_handoff",
+            )
+            body = str((result or {}).get("body") or "").strip() if isinstance(result, dict) else ""
+            if not body:
+                return ""
+            gate = pre_send_check_whatsapp(new.phone, body, prospect=new)
+            if gate and not re.search(r"\bindic|\brecomend", body, re.I):
+                return body
+            reasons = list(gate.reasons) or ["falou em indicação"]
+            feedback = "\n\nSua versão anterior foi recusada: " + "; ".join(reasons) + ". Reescreva."
+        return ""
+
+    async def _owner_send(self, text: str) -> bool:
+        group = getattr(self.wa_cfg, "notify_group", "") if self.wa_cfg else ""
+        phone = getattr(self.wa_cfg, "notify_phone", "") if self.wa_cfg else ""
+        if not (group or phone) or not self.wa or not self.wa.is_configured():
+            return False
+        result = await (self.wa.send_jid(group, text) if group else self.wa.send_text(phone, text))
+        if not result.ok:
+            logger.warning(f"Handler: could not notify owner: {result.error}")
+        return result.ok
+
     async def _notify_owner(self, kind: str, prospect, convo):
         """Tell the owner, on WhatsApp, that a conversation needs them.
 
@@ -757,6 +993,8 @@ class Handler:
             head = "Reunião a combinar"
         elif kind == "arts":
             head = "Cliente interessado em artes (um designer deve enviar o portfólio)"
+        elif kind == "demo":
+            head = "Cliente pediu vídeo ou exemplo (mande pelo celular do Harvey)"
         elif kind == "cold":
             head = "Conversa esfriou (sem resposta depois das retomadas)"
         else:
@@ -964,8 +1202,8 @@ Respond with ONLY the category label, nothing else."""
                 return "qualifying"
             if current_stage in ("qualifying", "presenting"):
                 return "negotiating"
-            if current_stage == "negotiating":
-                return "closing"
+            # Closing only on an explicit signal above: one more friendly
+            # "sim" is not a deal, and closing pages the owner for a meeting.
 
         if intent == "objection":
             # Objections typically happen during presenting or negotiating
