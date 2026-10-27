@@ -1140,6 +1140,26 @@ async def test_whatsapp_prompt_knows_when_the_trial_was_just_offered(state):
 
 
 @pytest.mark.asyncio
+async def test_whatsapp_prompt_knows_whether_the_product_was_introduced(state):
+    from harvey.models.conversation import Conversation, Message
+    handler = make_handler(state)
+    handler.brain = RecordingBrain()
+    prospect = Prospect(first_name="E", last_name="x", title="t", company="Loja", phone="5511912345678")
+    convo = Conversation(id="c1", prospect_id="p", channel="whatsapp", thread=[
+        Message(sender="prospect", content="Nossas vendas variam entre os dois"),
+    ])
+    await handler._generate_whatsapp_response("question", "variam", prospect, convo)
+    assert handler.brain.prompts[0][1]["product_introduced"] == "não"
+
+    convo.thread += [
+        Message(sender="harvey", content="A gente monta um site pra loja com fotos e preços."),
+        Message(sender="prospect", content="legal"),
+    ]
+    await handler._generate_whatsapp_response("question", "legal", prospect, convo)
+    assert handler.brain.prompts[1][1]["product_introduced"] == "sim"
+
+
+@pytest.mark.asyncio
 async def test_whatsapp_prompt_tracks_pro_mentions_and_turns(state):
     from harvey.models.conversation import Conversation, Message
     handler = make_handler(state)
@@ -1557,6 +1577,63 @@ async def test_followup_is_dropped_if_the_customer_wrote_back(state):
     assert (await followups(state))[0]["status"] == "cancelled"
 
 
+@pytest.mark.asyncio
+async def test_an_unreadable_chat_holds_back_only_its_own_followup(state):
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state)
+    await quiet_conversation(state, prospect, hours_ago=25)
+
+    async def broken(phone, since="", limit=30):
+        raise RuntimeError("gateway 500")
+    working = handler.wa.get_incoming
+    handler.wa.get_incoming = broken
+    assert await handler.run() is True                       # the rest of the cycle still sends
+    assert prospect.id in handler.wa_unread
+    assert await followups(state) == []                      # she may have answered
+
+    handler.wa.get_incoming = working
+    await handler.run()
+    assert prospect.id not in handler.wa_unread
+    assert len(await followups(state)) == 1
+
+
+@pytest.mark.asyncio
+async def test_sender_holds_a_followup_while_its_chat_is_unread(state):
+    prospect = await contacted_prospect(state)
+    convo = await quiet_conversation(state, prospect, hours_ago=25)
+    agent = make_agent(state)
+    await state.add_outbox_item(
+        prospect_id=prospect.id, conversation_id=convo.id, kind="followup",
+        to_email=prospect.phone, subject="", body="Lembrei de você!", status="approved",
+        provider="wa-akg", channel="whatsapp", send_at=_now_iso(),
+    )
+    agent.client.sent.clear()
+    agent.unread_prospects = {prospect.id}
+    await agent.send()
+    assert agent.client.sent == []
+    assert (await followups(state))[0]["status"] == "approved"   # waits, not cancelled
+
+    agent.unread_prospects.clear()
+    await agent.send()
+    assert (await followups(state))[0]["status"] == "sent"
+
+
+@pytest.mark.asyncio
+async def test_a_stale_followup_is_dropped_not_sent_late(state):
+    from harvey.agents.whatsapp import FOLLOWUP_STALE_HOURS, _now
+    prospect = await contacted_prospect(state)
+    convo = await quiet_conversation(state, prospect, hours_ago=100)
+    agent = make_agent(state)
+    await state.add_outbox_item(
+        prospect_id=prospect.id, conversation_id=convo.id, kind="followup",
+        to_email=prospect.phone, subject="", body="Lembrei de você!", status="approved",
+        provider="wa-akg", channel="whatsapp",
+        send_at=(_now() - timedelta(hours=FOLLOWUP_STALE_HOURS + 1)).isoformat(),
+    )
+    await agent.send()
+    assert agent.client.sent == []
+    item = (await followups(state))[0]
+    assert item["status"] == "cancelled" and item["error"].startswith("stale")
 
 
 @pytest.mark.asyncio

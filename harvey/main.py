@@ -235,6 +235,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     handler = Handler(brain, state, config, env)
     analyst = Analyst(state)
     whatsapp = WhatsAppAgent(brain, state, config, env)
+    whatsapp.unread_prospects = handler.wa_unread
     wa_on = whatsapp.enabled
     if wa_on:
         logger.info("WhatsApp channel is on (WA-AKG gateway).")
@@ -381,7 +382,9 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                           if n in REPLY_READERS and outcomes.get(n) is not True]
                 paused = brain.paused_reason
                 if paused or unread:
-                    reason = paused or "replies couldn't all be read and handled."
+                    reason = paused or (
+                        f"replies couldn't all be read and handled ({', '.join(unread)})."
+                    )
                     logger.error(
                         f"Not sending this cycle: {reason} Queued emails wait "
                         "until replies can be read again."

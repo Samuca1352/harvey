@@ -53,6 +53,9 @@ KILL_SWITCH_KEY = "sending_paused"
 # through the day instead of bursting the daily cap.
 WRITE_BATCH = 8
 MAX_SENDS_PER_CYCLE = 4
+# A nudge that sat unsent this long (sending was stuck, then a restart freed
+# it) is dropped, not fired in a burst days late. Covers a night of quiet hours.
+FOLLOWUP_STALE_HOURS = 12
 MAX_DRAFT_ATTEMPTS = 3
 REPLY_DELAY_SECONDS = (4, 12)
 # Cold messages go out one at a time, each after a random gap, from whichever
@@ -153,6 +156,9 @@ class WhatsAppAgent:
         self._send_lock = asyncio.Lock()
         # The night shift and the heartbeat both stage; never at the same time.
         self._stage_lock = asyncio.Lock()
+        # The Handler's set of chats it couldn't read (wired in main): their
+        # follow-ups wait, since an unread answer would make them wrong.
+        self.unread_prospects: set[str] = set()
         # Disabled in tests to skip the gaps between sends.
         self.send_pacing = True
 
@@ -605,6 +611,16 @@ class WhatsAppAgent:
                     item["id"], status="cancelled",
                     error="customer wrote back, conversation closed, or prospect suppressed",
                 )
+                continue
+            if item["kind"] == "followup" and item["prospect_id"] in self.unread_prospects:
+                continue
+            stale_before = (_now() - timedelta(hours=FOLLOWUP_STALE_HOURS)).isoformat()
+            if item["kind"] == "followup" and (item.get("send_at") or "") < stale_before:
+                await self.state.update_outbox_item(
+                    item["id"], status="cancelled",
+                    error=f"stale: unsent for over {FOLLOWUP_STALE_HOURS}h",
+                )
+                logger.warning(f"WhatsApp: dropped a stale follow-up to {item['to_email']}.")
                 continue
             if cold and prospect.status in STOP_STATUSES:
                 await self.state.update_outbox_item(

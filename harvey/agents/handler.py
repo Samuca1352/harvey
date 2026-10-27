@@ -176,6 +176,11 @@ DESIGNER_PROMISE_RE = re.compile(
     r"\b(?:vou|vamos)\b.{0,100}\b(?:designer|designers|equipe|time)\b",
     re.IGNORECASE,
 )
+# A message of ours that already said what we sell.
+PRODUCT_INTRO_RE = re.compile(
+    r"vitrine|cat[aá]logo|site (?:pra|para|da) (?:a )?loja|loja online|prospectboost",
+    re.IGNORECASE,
+)
 ARTS_INTEREST_RE = re.compile(
     r"\bartes?\b|portf[oó]lio|\bdesign(er)?s?\b|identidade visual|\bbanner\b|\blogo(tipo)?\b|\bposts?\b",
     re.IGNORECASE,
@@ -260,6 +265,10 @@ class Handler:
         # The heartbeat and the fast WhatsApp watcher both read replies; one
         # at a time, so a message is never answered twice.
         self._wa_lock = asyncio.Lock()
+        # Prospects whose WhatsApp couldn't be read last time we tried: an
+        # answer may be sitting there, so no nudge goes to them until a read
+        # works. Everyone else keeps going.
+        self.wa_unread: set[str] = set()
         self.skills = ""
 
     @property
@@ -682,9 +691,11 @@ class Handler:
             try:
                 inbound = await self.wa.get_incoming(contact["phone"], since=contact["first_sent_at"])
             except Exception as e:
+                # One unreadable chat holds back its own nudges, not everyone's sends.
                 logger.error(f"Handler: reading WhatsApp from {contact['phone']} failed: {e}")
-                complete = False
+                self.wa_unread.add(contact["prospect_id"])
                 continue
+            self.wa_unread.discard(contact["prospect_id"])
             fresh = [m for m in inbound if not await self.state.is_reply_processed(f"wa:{m.id}")]
             # WhatsApp's own notices (e.g. "turned on disappearing messages")
             # reach the gateway as empty texts. Nobody wrote them: skip them.
@@ -797,6 +808,8 @@ class Handler:
             ]
             if any(i["status"] in ("pending_review", "approved") for i in done):
                 continue
+            if convo.prospect_id in self.wa_unread:
+                continue                # may have answered: we couldn't read the chat
             prospect = await self.state.get_prospect(convo.prospect_id)
             if prospect is None or prospect.status in NO_FOLLOWUP_STATUSES:
                 continue
@@ -870,6 +883,12 @@ class Handler:
         trial_recent = sum(
             1 for m in harvey_msgs if re.search(r"\bteste\b|15 dias|gr[aá]tis", m.content, re.I)
         )
+        # Openers B and C never say what we sell; until a message of ours has,
+        # "a vitrine" out of nowhere means nothing to the person.
+        product_introduced = any(
+            PRODUCT_INTRO_RE.search(text)
+            for text in [opener or ""] + [m.content for m in convo.thread if m.sender == "harvey"]
+        )
         prompt = self.brain.load_prompt(
             "whatsapp_reply",
             persona_name=me,
@@ -883,6 +902,7 @@ class Handler:
             trial_recent=trial_recent,
             questions_recent=questions_recent,
             pro_mentions=pro_mentions,
+            product_introduced="sim" if product_introduced else "não",
             harvey_turns=harvey_turns,
             pro_instruction=pro_instruction,
             banned_phrases=", ".join(
