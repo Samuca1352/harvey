@@ -1,0 +1,36 @@
+<!-- @dsCard group="Dashboard UI kit" viewport="520x960" name="Admin dashboard (mobile)" subtitle="Same app at phone width — drawer nav, 2×2 KPIs, swipeable boards" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProspectBoost — Mobile</title>
+<link rel="stylesheet" href="../../../styles.css">
+
+
+
+<style>body{margin:0;min-height:100vh;background:var(--bg-canvas);display:flex;align-items:center;justify-content:center;gap:40px;padding:32px;flex-wrap:wrap}.cap{font:var(--type-meta);color:var(--text-secondary);text-align:center;margin-top:12px}</style>
+<script src="../../runtime/react.js"></script>
+<script src="../../runtime/react-dom.js"></script>
+<script src="../../runtime/components.js"></script>
+</head>
+<body>
+<div id="root" style="display:contents"></div>
+<script src="../../runtime/ios-frame.js"></script>
+<script type="text/plain" data-reference-jsx>
+(() => {
+  function Phone({ nav }) {
+    return (
+      <div>
+        <IOSDevice>
+          <iframe src="index.html" title={'ProspectBoost mobile ' + nav} style={{ border: 0, width: '100%', height: '100%', display: 'block', paddingTop: 54, boxSizing: 'border-box', background: '#fff' }} />
+        </IOSDevice>
+        <div className="cap">Live app at 402px — tap the menu to navigate</div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<><Phone nav="home" /></>);
+})();
+</script>
+<script src="../../runtime/references_ui_kits_dashboard_mobile.js"></script></body>
+</html>

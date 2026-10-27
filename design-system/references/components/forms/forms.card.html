@@ -1,0 +1,41 @@
+<!-- @dsCard group="Components" viewport="700x560" name="Forms" subtitle="Composer, inputs, select, textarea, checkbox, radio, switch" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../../styles.css">
+
+
+
+
+<style>body{padding:20px 24px;background:#fff}.sec{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}.lbl{font:var(--type-label);color:var(--text-tertiary)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}</style>
+<script src="../../runtime/react.js"></script>
+<script src="../../runtime/react-dom.js"></script>
+<script src="../../runtime/components.js"></script>
+</head><body><div id="root"></div>
+<script type="text/plain" data-reference-jsx>
+const NS = window.ProspectBoostDesignSystem_668922;
+
+const { Composer, Input, Select, Textarea, Checkbox, Radio, Switch } = NS;
+function Demo() {
+  return (<div>
+    <div className="sec"><Composer placeholder="Ask your agent anything..." /></div>
+    <div className="sec"><span className="lbl">Input · filled search with shortcut / outline with label / error · Select</span>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        <Input variant="filled" iconLeft="search" placeholder="Search..." shortcut={['F','⌘']} />
+        <Select options={['Smartest (Claude Opus)','Balanced','Fastest']} iconLeft="sparkles" />
+        <Input label="Company domain" placeholder="acme.com" hint="We’ll enrich firmographics automatically." />
+        <Input label="Daily send limit" defaultValue="1200" error="Max 500 per mailbox per day" />
+      </div>
+    </div>
+    <div className="sec"><span className="lbl">Textarea · Checkbox · Radio · Switch</span>
+      <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr',gap:16}}>
+        <Textarea label="Agent instructions" placeholder="Add instructions for the agent..." rows={3} />
+        <div style={{display:'flex',flexDirection:'column',gap:10,paddingTop:20}}>
+          <Checkbox label="Skip prospects already in CRM" defaultChecked />
+          <Checkbox label="Require approval before sending" description="Drafts wait in Tasks → Queued" />
+          <div className="row" style={{gap:16}}><Radio name="c" label="Daily" defaultChecked /><Radio name="c" label="Weekly" /><Radio name="c" label="Off" disabled /></div>
+          <div className="row" style={{gap:16}}><Switch label="Agent active" defaultChecked /><Switch label="Paused" /></div>
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script><script src="../../runtime/references_components_forms_forms.card.js"></script></body></html>

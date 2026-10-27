@@ -408,11 +408,16 @@ def cmd_whatsapp(args):
             state = StateManager()
             await state.init_db()
             rows = await variant_stats(state)
-            print("\n  Abertura A (original) x B (pergunta curta)")
+            print("\n  Aberturas: A (original), B (pergunta curta), C (motivo + pergunta rápida)")
             if not rows:
                 print("  Ainda sem envios com variante registrada.\n")
             for r in rows:
-                print(f"  {r['variant']}: {r['sent']} enviadas, {r['replied']} responderam ({r['rate']:.0%})")
+                print(
+                    f"  {r['variant']}: {r['sent']} enviadas, {r['replied']} respostas humanas ({r['rate']:.0%}); "
+                    f"{r['automatic_only']} só automáticas, {r['interested']} com interesse registrado, "
+                    f"{r['refused']} recusaram, {r['meetings']} reuniões"
+                )
+            print("  Contatos marcados como teste são excluídos. Interesse registrado não confirma ativação ou venda.")
             print("  (compare só com 40+ envios por variante; antes disso é ruído)\n")
         asyncio.run(_stats())
         return

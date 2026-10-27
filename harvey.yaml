@@ -74,7 +74,8 @@ channels:
     default_country_code: "55"
     persona_name: "Rafael"        # como o assistente se apresenta no WhatsApp
     opt_out_lines: []            # sem frase de descadastro na 1ª mensagem; "não quero"/"pare" continuam sendo entendidos
-    opener_test: true            # A/B: abertura A (original) x B (pergunta curta); veja com: harvey whatsapp stats
+    opener_test: true            # teste de aberturas; compare na aba Aberturas do dashboard ou com: harvey whatsapp stats
+    opener_variants: [A, C]      # A original x C (motivo + pergunta rápida); B aposentada em 23/10 (38% x 45% da A), histórico mantido
     min_gap_seconds: 30
     max_gap_seconds: 90
     reply_window_days: 14
@@ -83,7 +84,7 @@ channels:
     notify_phone: "5517997191017"             # usado só se notify_group estiver vazio
 
 usage:
-  max_daily_claude_percent: 80
+  max_daily_claude_percent: 98
   heartbeat_interval_minutes: 15
   quiet_hours:
     start: "21:00"

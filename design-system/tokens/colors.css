@@ -1,0 +1,70 @@
+:root{
+/* Brand — from the supplied palette (#A9D4FF #F1E6EC #FFFFFF #F3F3F5 #FB5668 #0F0816) */
+--pb-sky-50:#F3F9FF;--pb-sky-100:#E2F0FF;--pb-sky-200:#C9E4FF;--pb-sky-300:#A9D4FF;--pb-sky-400:#7DBBFA;--pb-sky-600:#2F6FD6;
+--pb-blush-50:#F9F4F7;--pb-blush-100:#F1E6EC;--pb-blush-200:#E6D3DD;
+--pb-coral-50:#FFEEF0;--pb-coral-100:#FFD9DE;--pb-coral-500:#FB5668;--pb-coral-600:#E23A4E;
+--pb-ink:#0F0816;--pb-black:#000000;--pb-white:#FFFFFF;
+
+/* Neutrals — sampled from dashboard surfaces */
+--pb-gray-25:#FCFCFC;--pb-gray-50:#FAFAFA;--pb-gray-75:#F7F7F8;--pb-gray-100:#F3F3F5;--pb-gray-150:#EEEEF0;--pb-gray-200:#E6E6E9;--pb-gray-300:#D4D4D9;--pb-gray-400:#A6A6AE;--pb-gray-500:#85858F;--pb-gray-600:#5E5E68;--pb-gray-700:#3E3E46;--pb-gray-800:#24242A;--pb-gray-900:#141418;
+
+/* Status + data hues — sampled from metric bars, status squares and tags */
+--pb-green-50:#E7F9ED;--pb-green-500:#04A943;--pb-green-600:#16A34A;--pb-mint-400:#38E07F;
+--pb-red-50:#FEECEA;--pb-red-500:#F54430;--pb-red-600:#D9352B;
+--pb-orange-50:#FFF4E5;--pb-orange-500:#FE941A;--pb-orange-600:#F08A0C;
+--pb-blue-50:#EAF0FF;--pb-blue-500:#4C8DF6;--pb-blue-600:#3B6FF0;
+--pb-azure-50:#E6F4FE;--pb-azure-400:#5BB8F8;--pb-azure-500:#3FA9F5;
+--pb-pink-50:#FFEAF1;--pb-pink-500:#EE3F8A;--pb-pink-600:#E8366A;
+--pb-purple-50:#F1ECFF;--pb-purple-500:#8E5CF5;--pb-purple-600:#7C4FE8;
+
+/* Semantic — surfaces */
+--bg-app:var(--pb-white);
+--bg-subtle:var(--pb-gray-50);
+--bg-muted:var(--pb-gray-100);
+--bg-canvas:var(--pb-gray-75);
+--surface-card:var(--pb-white);
+--surface-tile:var(--pb-gray-50);
+--surface-inset:var(--pb-gray-75);
+--surface-row:var(--pb-gray-50);
+--surface-hover:var(--pb-gray-100);
+--surface-selected:var(--pb-gray-100);
+--surface-inverse:var(--pb-black);
+--surface-overlay:rgba(15,8,22,.32);
+
+/* Semantic — borders */
+--border-subtle:var(--pb-gray-150);
+--border-default:var(--pb-gray-200);
+--border-strong:var(--pb-gray-300);
+--border-dashed:var(--pb-gray-300);
+
+/* Semantic — text */
+--text-primary:var(--pb-gray-900);
+--text-body:var(--pb-gray-700);
+--text-secondary:var(--pb-gray-600);
+--text-tertiary:var(--pb-gray-500);
+--text-placeholder:var(--pb-gray-400);
+--text-inverse:var(--pb-white);
+--text-brand:var(--pb-ink);
+--text-link:var(--pb-gray-900);
+
+/* Semantic — actions */
+--action-primary:var(--pb-black);
+--action-primary-hover:var(--pb-gray-800);
+--action-primary-fg:var(--pb-white);
+--action-secondary:var(--pb-white);
+--action-secondary-hover:var(--pb-gray-50);
+--action-secondary-border:var(--pb-gray-200);
+--action-ghost-hover:var(--pb-gray-100);
+--focus-ring:var(--pb-sky-300);
+
+/* Semantic — status (fg = solid/marker, bg = tint, text = readable on tint) */
+--status-success:var(--pb-green-500);--status-success-bg:var(--pb-green-50);--status-success-text:var(--pb-green-600);
+--status-danger:var(--pb-red-500);--status-danger-bg:var(--pb-red-50);--status-danger-text:var(--pb-red-600);
+--status-warning:var(--pb-orange-500);--status-warning-bg:var(--pb-orange-50);--status-warning-text:var(--pb-orange-600);
+--status-info:var(--pb-blue-500);--status-info-bg:var(--pb-blue-50);--status-info-text:var(--pb-blue-600);
+--status-queued:var(--pb-azure-400);--status-running:var(--pb-orange-500);--status-done:var(--pb-green-500);--status-failed:var(--pb-red-600);
+
+/* Data-vis series (agent/segment bars) */
+--chart-1:var(--pb-blue-500);--chart-2:var(--pb-pink-500);--chart-3:var(--pb-azure-500);--chart-4:var(--pb-purple-500);--chart-5:var(--pb-green-500);--chart-6:var(--pb-orange-500);
+--chart-track:var(--pb-gray-200);
+}

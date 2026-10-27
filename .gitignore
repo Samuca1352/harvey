@@ -15,6 +15,7 @@ dist/
 build/
 .venv/
 venv/
+.local_libs/
 
 # LinkedIn cookies
 linkedin_cookies.json
@@ -59,3 +60,16 @@ skills/competitive_intel.md
 harvey.local.yaml
 # Added by code-review-graph
 .code-review-graph/
+
+# JavaScript tooling (reference runtime is intentionally committed for offline use)
+node_modules/
+
+# These are design-system sources/specimens, not Harvey runtime data.
+!design-system/components/data/
+!design-system/components/data/**
+!design-system/references/components/data/
+!design-system/references/components/data/**
+
+# Graphify internal cache
+graphify-out/cache/
+

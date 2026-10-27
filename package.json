@@ -1,0 +1,23 @@
+{
+  "name": "harvey-ui-tooling",
+  "private": true,
+  "workspaces": [
+    "design-system"
+  ],
+  "scripts": {
+    "build:design-system": "node scripts/build-design-system.mjs",
+    "lint": "eslint .",
+    "test:design-system": "node scripts/check-design-system.mjs",
+    "check:design-system": "npm run build:design-system && npm run lint && npm run typecheck:design-system && npm run test:design-system",
+    "typecheck:design-system": "tsc --noEmit --strict --lib es2020,dom --moduleResolution bundler --module esnext design-system/index.d.ts"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.27",
+    "@types/react-dom": "18.3.7",
+    "esbuild": "0.25.12",
+    "eslint": "9.39.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.9.3"
+  }
+}

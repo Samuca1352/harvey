@@ -1,0 +1,155 @@
+/* Vendored from design-system/tokens; see DESIGN.md. No global reset. */
+:root{
+/* Brand — from the supplied palette (#A9D4FF #F1E6EC #FFFFFF #F3F3F5 #FB5668 #0F0816) */
+--pb-sky-50:#F3F9FF;--pb-sky-100:#E2F0FF;--pb-sky-200:#C9E4FF;--pb-sky-300:#A9D4FF;--pb-sky-400:#7DBBFA;--pb-sky-600:#2F6FD6;
+--pb-blush-50:#F9F4F7;--pb-blush-100:#F1E6EC;--pb-blush-200:#E6D3DD;
+--pb-coral-50:#FFEEF0;--pb-coral-100:#FFD9DE;--pb-coral-500:#FB5668;--pb-coral-600:#E23A4E;
+--pb-ink:#0F0816;--pb-black:#000000;--pb-white:#FFFFFF;
+
+/* Neutrals — sampled from dashboard surfaces */
+--pb-gray-25:#FCFCFC;--pb-gray-50:#FAFAFA;--pb-gray-75:#F7F7F8;--pb-gray-100:#F3F3F5;--pb-gray-150:#EEEEF0;--pb-gray-200:#E6E6E9;--pb-gray-300:#D4D4D9;--pb-gray-400:#A6A6AE;--pb-gray-500:#85858F;--pb-gray-600:#5E5E68;--pb-gray-700:#3E3E46;--pb-gray-800:#24242A;--pb-gray-900:#141418;
+
+/* Status + data hues — sampled from metric bars, status squares and tags */
+--pb-green-50:#E7F9ED;--pb-green-500:#04A943;--pb-green-600:#16A34A;--pb-mint-400:#38E07F;
+--pb-red-50:#FEECEA;--pb-red-500:#F54430;--pb-red-600:#D9352B;
+--pb-orange-50:#FFF4E5;--pb-orange-500:#FE941A;--pb-orange-600:#F08A0C;
+--pb-blue-50:#EAF0FF;--pb-blue-500:#4C8DF6;--pb-blue-600:#3B6FF0;
+--pb-azure-50:#E6F4FE;--pb-azure-400:#5BB8F8;--pb-azure-500:#3FA9F5;
+--pb-pink-50:#FFEAF1;--pb-pink-500:#EE3F8A;--pb-pink-600:#E8366A;
+--pb-purple-50:#F1ECFF;--pb-purple-500:#8E5CF5;--pb-purple-600:#7C4FE8;
+
+/* Semantic — surfaces */
+--bg-app:var(--pb-white);
+--bg-subtle:var(--pb-gray-50);
+--bg-muted:var(--pb-gray-100);
+--bg-canvas:var(--pb-gray-75);
+--surface-card:var(--pb-white);
+--surface-tile:var(--pb-gray-50);
+--surface-inset:var(--pb-gray-75);
+--surface-row:var(--pb-gray-50);
+--surface-hover:var(--pb-gray-100);
+--surface-selected:var(--pb-gray-100);
+--surface-inverse:var(--pb-black);
+--surface-overlay:rgba(15,8,22,.32);
+
+/* Semantic — borders */
+--border-subtle:var(--pb-gray-150);
+--border-default:var(--pb-gray-200);
+--border-strong:var(--pb-gray-300);
+--border-dashed:var(--pb-gray-300);
+
+/* Semantic — text */
+--text-primary:var(--pb-gray-900);
+--text-body:var(--pb-gray-700);
+--text-secondary:var(--pb-gray-600);
+--text-tertiary:var(--pb-gray-500);
+--text-placeholder:var(--pb-gray-400);
+--text-inverse:var(--pb-white);
+--text-brand:var(--pb-ink);
+--text-link:var(--pb-gray-900);
+
+/* Semantic — actions */
+--action-primary:var(--pb-black);
+--action-primary-hover:var(--pb-gray-800);
+--action-primary-fg:var(--pb-white);
+--action-secondary:var(--pb-white);
+--action-secondary-hover:var(--pb-gray-50);
+--action-secondary-border:var(--pb-gray-200);
+--action-ghost-hover:var(--pb-gray-100);
+--focus-ring:var(--pb-sky-300);
+
+/* Semantic — status (fg = solid/marker, bg = tint, text = readable on tint) */
+--status-success:var(--pb-green-500);--status-success-bg:var(--pb-green-50);--status-success-text:var(--pb-green-600);
+--status-danger:var(--pb-red-500);--status-danger-bg:var(--pb-red-50);--status-danger-text:var(--pb-red-600);
+--status-warning:var(--pb-orange-500);--status-warning-bg:var(--pb-orange-50);--status-warning-text:var(--pb-orange-600);
+--status-info:var(--pb-blue-500);--status-info-bg:var(--pb-blue-50);--status-info-text:var(--pb-blue-600);
+--status-queued:var(--pb-azure-400);--status-running:var(--pb-orange-500);--status-done:var(--pb-green-500);--status-failed:var(--pb-red-600);
+
+/* Data-vis series (agent/segment bars) */
+--chart-1:var(--pb-blue-500);--chart-2:var(--pb-pink-500);--chart-3:var(--pb-azure-500);--chart-4:var(--pb-purple-500);--chart-5:var(--pb-green-500);--chart-6:var(--pb-orange-500);
+--chart-track:var(--pb-gray-200);
+}
+
+:root{
+--font-sans:"Figtree","Gellix",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+--font-display:var(--font-sans);
+--font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+--weight-regular:400;--weight-medium:500;--weight-semibold:600;
+
+/* Product scale (dense admin UI) */
+--text-2xs:10px;--text-xs:11px;--text-sm:12px;--text-base:13px;--text-md:14px;--text-lg:15px;--text-xl:18px;--text-2xl:24px;
+/* Marketing / display scale */
+--text-3xl:32px;--text-4xl:44px;--text-5xl:64px;--text-6xl:88px;
+
+--leading-tight:1.08;--leading-snug:1.25;--leading-normal:1.45;--leading-relaxed:1.6;
+--tracking-display:-0.025em;--tracking-heading:-0.01em;--tracking-body:0;--tracking-mono:0;
+
+/* Roles */
+--type-display:var(--weight-medium) var(--text-5xl)/var(--leading-tight) var(--font-display);
+--type-headline:var(--weight-medium) var(--text-4xl)/1.15 var(--font-display);
+--type-page-title:var(--weight-medium) var(--text-xl)/var(--leading-snug) var(--font-sans);
+--type-panel-title:var(--weight-regular) var(--text-lg)/var(--leading-snug) var(--font-sans);
+--type-body:var(--weight-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
+--type-body-lg:var(--weight-regular) var(--text-md)/var(--leading-normal) var(--font-sans);
+--type-meta:var(--weight-regular) var(--text-sm)/var(--leading-snug) var(--font-sans);
+--type-label:var(--weight-regular) var(--text-xs)/var(--leading-snug) var(--font-sans);
+--type-metric:var(--weight-semibold) var(--text-lg)/1 var(--font-sans);
+--type-mono:var(--weight-regular) var(--text-sm)/var(--leading-relaxed) var(--font-mono);
+}
+
+:root{
+--space-0:0;--space-px:1px;--space-0-5:2px;--space-1:4px;--space-1-5:6px;--space-2:8px;--space-2-5:10px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--space-16:64px;--space-20:80px;
+
+--radius-xs:3px;   /* chart bars, status squares */
+--radius-sm:6px;   /* tags, kbd, count pills */
+--radius-md:8px;   /* buttons, inputs, nav items, icon chips, rows */
+--radius-lg:10px;  /* inset boxes inside cards */
+--radius-xl:12px;  /* cards, panels */
+--radius-2xl:16px; /* dialogs, composer, large panels */
+--radius-3xl:24px; /* marketing tiles */
+--radius-full:999px;
+
+/* Layout */
+--sidebar-width:248px;
+--topbar-height:64px;
+--rail-width:280px;
+--content-pad:16px;
+--content-max:1440px;
+--control-h-sm:28px;--control-h-md:36px;--control-h-lg:44px;
+--icon-chip:32px;
+--bp-mobile:640px;--bp-tablet:960px;--bp-desktop:1200px;
+}
+
+:root{
+--border-hairline:1px solid var(--border-subtle);
+--border-control:1px solid var(--border-default);
+
+--shadow-none:none;
+--shadow-xs:0 1px 2px rgba(15,8,22,.04);
+--shadow-sm:0 1px 2px rgba(15,8,22,.04),0 2px 6px rgba(15,8,22,.04);
+--shadow-md:0 2px 4px rgba(15,8,22,.03),0 8px 24px rgba(15,8,22,.06);
+--shadow-lg:0 4px 8px rgba(15,8,22,.04),0 24px 56px rgba(15,8,22,.10);
+--shadow-inset:inset 0 1px 0 rgba(255,255,255,.7);
+--ring-focus:0 0 0 3px rgba(169,212,255,.65);
+
+/* Signature gradients (hero wash + "Today task" iridescent rim) */
+--gradient-hero:linear-gradient(180deg,#A9D4FF 0%,#CFE3FB 38%,#EDE6F0 72%,#F8F2F6 100%); /* @kind color */
+--gradient-sky-fade:linear-gradient(180deg,#A9D4FF 0%,rgba(169,212,255,0) 100%); /* @kind color */
+--gradient-iris:linear-gradient(100deg,#F1D6DF 0%,#E9E4F3 30%,#C5D3EE 62%,#5B83D6 100%); /* @kind color */
+--gradient-iris-soft:linear-gradient(115deg,rgba(241,214,223,.9) 0%,rgba(255,255,255,.85) 45%,rgba(197,211,238,.9) 100%); /* @kind color */
+--pattern-hatch:repeating-linear-gradient(135deg,rgba(0,0,0,.045) 0 1px,transparent 1px 4px); /* @kind color */
+
+--ease-out:cubic-bezier(.2,.8,.2,1); /* @kind other */
+--ease-in-out:cubic-bezier(.4,0,.2,1); /* @kind other */
+--dur-fast:120ms; /* @kind other */
+--dur-base:180ms; /* @kind other */
+--dur-slow:280ms; /* @kind other */
+
+--blur-glass:12px; /* @kind other */
+--z-sticky:20; /* @kind other */
+--z-drawer:40; /* @kind other */
+--z-overlay:50; /* @kind other */
+--z-toast:60; /* @kind other */
+--z-tooltip:70; /* @kind other */
+}

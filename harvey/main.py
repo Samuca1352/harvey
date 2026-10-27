@@ -181,6 +181,10 @@ async def whatsapp_watcher(handler, whatsapp, brain, config, stop_event):
                 await whatsapp.ensure_online()
                 await handler._run_whatsapp(days=WHATSAPP_WATCH_DAYS)
                 await whatsapp.send(replies_only=True)
+            elif not brain.paused_reason:
+                # Over budget: no new replies get written, but ones already
+                # written still go out.
+                await whatsapp.send(replies_only=True)
         except (KeyboardInterrupt, asyncio.CancelledError):
             raise
         except Exception as e:
@@ -301,6 +305,12 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                     f"{max_calls} calls). Re-checking in "
                     f"{config.usage.heartbeat_interval_minutes} minutes."
                 )
+                # Messages already written cost no model call: keep them going out.
+                if wa_on:
+                    try:
+                        await whatsapp.send()
+                    except Exception as e:
+                        logger.error(f"WhatsApp send while over budget: {e}", exc_info=True)
                 # One cycle, not an hour: an unreadable quota (a passing
                 # network blip) falls back to the call counter and lands here.
                 if await _interruptible_sleep(interval, stop_event):

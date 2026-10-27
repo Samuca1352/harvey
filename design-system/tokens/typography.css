@@ -1,0 +1,27 @@
+:root{
+--font-sans:"Figtree","Gellix",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+--font-display:var(--font-sans);
+--font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+--weight-regular:400;--weight-medium:500;--weight-semibold:600;
+
+/* Product scale (dense admin UI) */
+--text-2xs:10px;--text-xs:11px;--text-sm:12px;--text-base:13px;--text-md:14px;--text-lg:15px;--text-xl:18px;--text-2xl:24px;
+/* Marketing / display scale */
+--text-3xl:32px;--text-4xl:44px;--text-5xl:64px;--text-6xl:88px;
+
+--leading-tight:1.08;--leading-snug:1.25;--leading-normal:1.45;--leading-relaxed:1.6;
+--tracking-display:-0.025em;--tracking-heading:-0.01em;--tracking-body:0;--tracking-mono:0;
+
+/* Roles */
+--type-display:var(--weight-medium) var(--text-5xl)/var(--leading-tight) var(--font-display);
+--type-headline:var(--weight-medium) var(--text-4xl)/1.15 var(--font-display);
+--type-page-title:var(--weight-medium) var(--text-xl)/var(--leading-snug) var(--font-sans);
+--type-panel-title:var(--weight-regular) var(--text-lg)/var(--leading-snug) var(--font-sans);
+--type-body:var(--weight-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
+--type-body-lg:var(--weight-regular) var(--text-md)/var(--leading-normal) var(--font-sans);
+--type-meta:var(--weight-regular) var(--text-sm)/var(--leading-snug) var(--font-sans);
+--type-label:var(--weight-regular) var(--text-xs)/var(--leading-snug) var(--font-sans);
+--type-metric:var(--weight-semibold) var(--text-lg)/1 var(--font-sans);
+--type-mono:var(--weight-regular) var(--text-sm)/var(--leading-relaxed) var(--font-mono);
+}

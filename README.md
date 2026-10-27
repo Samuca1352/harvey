@@ -31,6 +31,15 @@ anything, and approving mail one message at a time:
 
 ---
 
+## Design system
+
+The local [design system](design-system/README.md) contains the recovered React
+components, tokens and guidelines. Open [the visual catalog](design-system/references/index.html)
+in a browser; all references work offline. This is separate from the operational
+Harvey dashboard and its existing theme. For UI development, run `npm ci` and
+`npm run check:design-system` from the repository root. See the
+[triage report](design-system/TRIAGE.md) for provenance and migration decisions.
+
 ## Table of contents
 
 - [Why the subscription thing matters](#why-the-subscription-thing-matters)

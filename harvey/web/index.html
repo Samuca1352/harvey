@@ -8,12 +8,13 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to content</a>
 <header>
+  <button class="icon-btn menu-toggle" id="menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="main-nav" onclick="toggleNavigation()">Menu</button>
   <div class="brand">
-    <div class="mark">H</div>
     <div>
       <h1>Harvey</h1>
-      <div class="tagline">Always Be Closing</div>
+      <div class="tagline">Sales workspace</div>
     </div>
   </div>
   <div class="header-controls">
@@ -21,29 +22,100 @@
       <span class="status-dot stopped" id="header-dot"></span>
       <span id="header-status-text">Checking…</span>
     </div>
-    <button class="icon-btn" id="theme-btn" onclick="cycleTheme()"
-            title="Appearance: follows your system until you pick one">auto</button>
+    <div class="theme-switch" id="theme-switch" role="group" aria-label="Aparência">
+      <button class="theme-toggle-btn active" id="theme-light-btn" onclick="setTheme('light')" title="Ativar modo claro">
+        <svg class="lucide lucide-sun" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <span>Claro</span>
+      </button>
+      <button class="theme-toggle-btn" id="theme-dark-btn" onclick="setTheme('dark')" title="Ativar modo escuro">
+        <svg class="lucide lucide-moon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <span>Escuro</span>
+      </button>
+    </div>
     <button class="refresh-btn" onclick="loadCurrentTab()">Refresh</button>
   </div>
 </header>
 
-<nav>
-  <button class="active" onclick="showTab('today', this)">Today<span class="nav-count" id="nav-today"></span></button>
-  <button onclick="showTab('signals', this)">Signals<span class="nav-count" id="nav-signals"></span></button>
-  <button onclick="showTab('discover', this)">Discover</button>
-  <button onclick="showTab('companies', this)">Companies</button>
-  <button onclick="showTab('prospects', this)">Contacts</button>
-  <button onclick="showTab('campaigns', this)">Campaigns</button>
-  <button onclick="showTab('outbox', this)">Outbox<span class="nav-count" id="nav-outbox"></span></button>
-  <button onclick="showTab('conversations', this)">Conversations</button>
-  <button onclick="showTab('activity', this)">Activity</button>
-  <button onclick="showTab('usage', this)">Usage</button>
-  <button onclick="showTab('settings', this)">Settings</button>
-  <button onclick="showTab('controls', this)">Controls</button>
-  <button onclick="showTab('help', this)">Help</button>
+<button class="nav-backdrop" aria-label="Close navigation" onclick="toggleNavigation(false)"></button>
+<nav id="main-nav" aria-label="Main navigation">
+  <div class="nav-label">Workspace</div>
+  <button class="active" onclick="showTab('today', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-house" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path>
+  <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+</svg>Today<span class="nav-count" id="nav-today"></span></button>
+  <button onclick="showTab('signals', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-target" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"></circle>
+  <circle cx="12" cy="12" r="6"></circle>
+  <circle cx="12" cy="12" r="2"></circle>
+</svg>Signals<span class="nav-count" id="nav-signals"></span></button>
+  <button onclick="showTab('discover', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-search" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="11" cy="11" r="8"></circle>
+  <path d="m21 21-4.3-4.3"></path>
+</svg>Discover</button>
+  <button onclick="showTab('companies', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-building-2" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path>
+  <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
+  <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path>
+  <path d="M10 6h4"></path>
+  <path d="M10 10h4"></path>
+  <path d="M10 14h4"></path>
+  <path d="M10 18h4"></path>
+</svg>Companies</button>
+  <button onclick="showTab('prospects', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-users" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+  <circle cx="9" cy="7" r="4"></circle>
+  <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+</svg>Contacts</button>
+  <button onclick="showTab('campaigns', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-mail" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+</svg>Campaigns</button>
+  <button onclick="showTab('outbox', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-inbox" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+  <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+</svg>Outbox<span class="nav-count" id="nav-outbox"></span></button>
+  <button onclick="showTab('conversations', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-message-circle" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path>
+</svg>Conversations</button>
+  <button onclick="showTab('activity', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-clock" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"></circle>
+  <polyline points="12 6 12 12 16 14"></polyline>
+</svg>Activity</button>
+  <button onclick="showTab('openers', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-square-pen" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+  <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"></path>
+</svg>Aberturas</button>
+<div class="nav-label">Manage</div>
+  <button onclick="showTab('usage', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-chart-column" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>
+  <path d="M18 17V9"></path>
+  <path d="M13 17V5"></path>
+  <path d="M8 17v-3"></path>
+</svg>Usage</button>
+  <button onclick="showTab('settings', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-settings" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+  <circle cx="12" cy="12" r="3"></circle>
+</svg>Settings</button>
+  <button onclick="showTab('controls', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-sliders-horizontal" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="21" x2="14" y1="4" y2="4"></line>
+  <line x1="10" x2="3" y1="4" y2="4"></line>
+  <line x1="21" x2="12" y1="12" y2="12"></line>
+  <line x1="8" x2="3" y1="12" y2="12"></line>
+  <line x1="21" x2="16" y1="20" y2="20"></line>
+  <line x1="12" x2="3" y1="20" y2="20"></line>
+  <line x1="14" x2="14" y1="2" y2="6"></line>
+  <line x1="8" x2="8" y1="10" y2="14"></line>
+  <line x1="16" x2="16" y1="18" y2="22"></line>
+</svg>Controls</button>
+  <button onclick="showTab('help', this)"><svg aria-hidden="true" focusable="false" class="lucide lucide-circle-help" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"></circle>
+  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+  <path d="M12 17h.01"></path>
+</svg>Help</button>
 </nav>
 
-<main>
+<main id="main-content" tabindex="-1">
 
 <!-- Today: what needs a human -->
 <div id="today" class="section active">
@@ -51,6 +123,8 @@
     <h2>Today</h2>
     <p>Anything waiting on you, then everything Harvey has built so far.</p>
   </div>
+  <div class="metrics" id="today-metrics-bar"></div>
+  <div id="today-outreach"></div>
   <div class="today-grid">
     <div class="today-main">
       <div id="today-queue"></div>
@@ -184,6 +258,14 @@
 <div id="activity" class="section">
   <div class="section-head"><h2>Activity</h2><p>A running log of every action Harvey's agents have taken.</p></div>
   <div id="activity-list"></div>
+</div>
+
+<!-- Openers -->
+<div id="openers" class="section">
+  <div class="section-head"><h2>Aberturas</h2><p>Teste das primeiras mensagens de WhatsApp. Cada loja recebe uma variante fixa; aqui você compara quantas responderam e o que as respostas viraram. Só compare com 40+ envios por variante: antes disso é ruído.</p></div>
+  <div class="stats-grid" id="openers-stats"></div>
+  <div class="card" id="openers-table" style="display:none"></div>
+  <div id="openers-examples"></div>
 </div>
 
 <!-- Usage -->
@@ -412,6 +494,7 @@
     </details>
   </div>
 </div>
+
 
 </main>
 

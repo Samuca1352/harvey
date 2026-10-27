@@ -139,7 +139,7 @@ def answer_for(prompt):
     low = prompt.lower()
     if "respond with exactly: harvey_ready" in low:
         return "HARVEY_READY"
-    if "classify this email reply" in low:
+    if low.startswith("classify ") and "category" in low:
         if "remove me" in low:
             return "unsubscribe"
         return "interested" if "pricing" in low else "question"

@@ -12,7 +12,7 @@ upgrade cleanly in place.
 import json
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 
 import aiosqlite
@@ -439,6 +439,36 @@ _LAST_PROFILED = (
     "(CASE WHEN p.last_seen IS NULL OR c.profile_checked_at > p.last_seen"
     " THEN c.profile_checked_at ELSE p.last_seen END)"
 )
+
+# A conversation only counts as an answer when the other side actually wrote
+# something: a row with an empty, outgoing-only or unreadable thread is a
+# record Harvey opened, not a reply.
+_REAL_REPLY_MESSAGE_SQL = """message.type = 'object'
+                AND json_extract(message.value, '$.sender') = 'prospect'
+                AND trim(COALESCE(json_extract(message.value, '$.content'), '')) != ''"""
+
+# One row per (person, day they wrote to us) on a channel, from the message
+# timestamps in the thread: a conversation row's own created_at only dates the
+# first reply, so a second answer days later would be invisible without this.
+# Auto-responders (intent 'ooo') are not a person writing back.
+REPLY_DAYS_SQL = f"""SELECT c.prospect_id AS prospect_id,
+               substr(json_extract(message.value, '$.timestamp'), 1, 10) AS day
+        FROM conversations c,
+             json_each(CASE WHEN json_valid(c.thread_json) THEN c.thread_json ELSE '[]' END) message
+        WHERE c.channel = ? AND COALESCE(c.intent, '') != 'ooo'
+          AND json_extract(message.value, '$.timestamp') IS NOT NULL
+          AND {_REAL_REPLY_MESSAGE_SQL}"""
+
+REAL_REPLY_EXISTS_SQL = """EXISTS (
+              SELECT 1 FROM json_each(
+                  CASE WHEN json_valid(thread_json) THEN thread_json ELSE '[]' END
+              ) message
+              WHERE json_extract(CASE WHEN message.type = 'object' THEN message.value ELSE '{}' END,
+                                 '$.sender') = 'prospect'
+                AND trim(COALESCE(json_extract(
+                    CASE WHEN message.type = 'object' THEN message.value ELSE '{}' END,
+                    '$.content'), '')) != ''
+          )"""
 
 # Column whitelists for dynamic UPDATEs (prevents SQL injection via kwargs).
 _CAMPAIGN_COLUMNS = frozenset({
@@ -1040,6 +1070,144 @@ class StateManager:
                            AND date(c.created_at) = date('now') AND p.status != 'opted_out')""",
             ) as cursor:
                 return (await cursor.fetchone())[0]
+
+    # ── cold outreach: how many people were contacted, how many answered ──
+
+    async def cold_outreach_stats(self, channel: str = "whatsapp") -> dict:
+        """Cold first messages that went out, and who wrote back.
+
+        Counted per person, not per message: a second send to the same
+        prospect is the same cold contact. ``replied`` is a human reply —
+        a conversation with a real inbound message that isn't an
+        auto-responder (``ooo``). Explicit test contacts are left out, the
+        same way the opener comparison leaves them out.
+        """
+        async with self._connect() as db:
+            async with db.execute(
+                f"""SELECT COUNT(DISTINCT o.prospect_id),
+                           COUNT(DISTINCT CASE WHEN date(o.sent_at) = date('now')
+                                 THEN o.prospect_id END),
+                           COUNT(DISTINCT CASE WHEN datetime(o.sent_at) >= datetime('now', '-7 days')
+                                 THEN o.prospect_id END),
+                           COUNT(DISTINCT CASE WHEN c.human_replied = 1 THEN o.prospect_id END),
+                           COUNT(DISTINCT CASE WHEN c.human_replied = 1
+                                 AND datetime(o.sent_at) >= datetime('now', '-7 days')
+                                 THEN o.prospect_id END),
+                           COUNT(DISTINCT CASE WHEN c.engaged = 1
+                                 AND p.status NOT IN ('lost', 'opted_out')
+                                 THEN o.prospect_id END),
+                           COUNT(DISTINCT CASE WHEN p.status IN ('meeting', 'closed')
+                                 THEN o.prospect_id END),
+                           COUNT(DISTINCT CASE WHEN p.status IN ('lost', 'opted_out')
+                                 AND c.human_replied = 1 THEN o.prospect_id END),
+                           MIN(o.sent_at), MAX(o.sent_at)
+                    FROM outbox o
+                    JOIN prospects p ON p.id = o.prospect_id
+                    LEFT JOIN (
+                        SELECT prospect_id,
+                               MAX(COALESCE(intent, '') != 'ooo') AS human_replied,
+                               MAX(intent IN ('interested', 'question', 'objection')) AS engaged
+                        FROM conversations
+                        WHERE channel = ? AND {REAL_REPLY_EXISTS_SQL}
+                        GROUP BY prospect_id
+                    ) c ON c.prospect_id = o.prospect_id
+                    WHERE COALESCE(o.channel, 'email') = ? AND o.kind = 'sequence'
+                      AND o.status = 'sent'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM settings test
+                          WHERE test.key = 'wa_test_contact:' || p.id AND test.value = '1'
+                      )""",
+                (channel, channel),
+            ) as cursor:
+                row = await cursor.fetchone()
+        sent, today, sent_7d, replied, replied_7d, engaged, meetings, refused, first, last = row
+        return {
+            "replied_today": await self.cold_replies_today(channel),
+            "channel": channel,
+            "contacted": sent,
+            "contacted_today": today,
+            "contacted_7d": sent_7d,
+            "replied": replied,
+            "replied_7d": replied_7d,
+            "awaiting": sent - replied,
+            "rate": (replied / sent if sent else 0.0),
+            "rate_7d": (replied_7d / sent_7d if sent_7d else 0.0),
+            "engaged": engaged,
+            "meetings": meetings,
+            "refused": refused,
+            "first_sent": first or "",
+            "last_sent": last or "",
+        }
+
+    async def cold_replies_today(self, channel: str = "whatsapp") -> int:
+        """People who wrote to us today, among the ones we messaged cold."""
+        async with self._connect() as db:
+            async with db.execute(
+                f"""SELECT COUNT(DISTINCT r.prospect_id) FROM ({REPLY_DAYS_SQL}) r
+                    WHERE r.day = date('now') AND EXISTS (
+                        SELECT 1 FROM outbox o JOIN prospects p ON p.id = o.prospect_id
+                        WHERE o.prospect_id = r.prospect_id AND o.kind = 'sequence'
+                          AND o.status = 'sent' AND COALESCE(o.channel, 'email') = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM settings test
+                              WHERE test.key = 'wa_test_contact:' || p.id AND test.value = '1'
+                          ))""",
+                (channel, channel),
+            ) as cursor:
+                return (await cursor.fetchone())[0]
+
+    async def cold_outreach_by_day(
+        self, days: int | None = None, channel: str = "whatsapp"
+    ) -> list[dict]:
+        """Cold contacts and replies per day, newest last.
+
+        ``days = None`` is the whole history, from the first cold message to
+        today. Days with nothing are kept rather than skipped — the gaps are
+        the point: they show when Harvey stopped sending.
+        """
+        async with self._connect() as db:
+            async with db.execute(
+                """SELECT date(o.sent_at) AS day, COUNT(DISTINCT o.prospect_id) AS n
+                   FROM outbox o JOIN prospects p ON p.id = o.prospect_id
+                   WHERE COALESCE(o.channel, 'email') = ? AND o.kind = 'sequence'
+                     AND o.status = 'sent' AND o.sent_at IS NOT NULL
+                     AND NOT EXISTS (
+                         SELECT 1 FROM settings test
+                         WHERE test.key = 'wa_test_contact:' || p.id AND test.value = '1'
+                     )
+                   GROUP BY day""",
+                (channel,),
+            ) as cursor:
+                sent = {r[0]: r[1] for r in await cursor.fetchall() if r[0]}
+            async with db.execute(
+                f"""SELECT r.day, COUNT(DISTINCT r.prospect_id)
+                    FROM ({REPLY_DAYS_SQL}) r
+                    WHERE EXISTS (
+                        SELECT 1 FROM outbox o JOIN prospects p ON p.id = o.prospect_id
+                        WHERE o.prospect_id = r.prospect_id AND o.kind = 'sequence'
+                          AND o.status = 'sent' AND COALESCE(o.channel, 'email') = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM settings test
+                              WHERE test.key = 'wa_test_contact:' || p.id AND test.value = '1'
+                          ))
+                    GROUP BY r.day""",
+                (channel, channel),
+            ) as cursor:
+                replied = {r[0]: r[1] for r in await cursor.fetchall() if r[0]}
+
+        today = datetime.now(timezone.utc).date()
+        if days is not None:
+            start = today - timedelta(days=max(1, int(days)) - 1)
+        elif sent or replied:
+            start = min(date.fromisoformat(d) for d in {*sent, *replied})
+        else:
+            return []
+        start = min(start, today)
+        return [
+            {"day": (d := (start + timedelta(days=i)).isoformat()),
+             "sent": sent.get(d, 0), "replied": replied.get(d, 0)}
+            for i in range((today - start).days + 1)
+        ]
 
     # ── WhatsApp helpers ──
 
@@ -2004,3 +2172,4 @@ class StateManager:
             # Claude budget the rest of the loop is rationing.
             "unprofiled": await self.count_companies_needing_profile(),
         }
+

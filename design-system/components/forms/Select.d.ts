@@ -1,0 +1,12 @@
+import * as React from 'react';
+
+export interface SelectOption { value: string; label: string; }
+export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
+  label?: string;
+  hint?: string;
+  options: Array<string | SelectOption>;
+  iconLeft?: string;
+  size?: 'sm' | 'md' | 'lg';
+  variant?: 'outline' | 'filled';
+}
+export function Select(props: SelectProps): JSX.Element;

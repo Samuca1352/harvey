@@ -683,6 +683,150 @@ async def get_usage():
     }
 
 
+@app.get("/api/openers")
+async def get_openers():
+    """Opener variant comparison for the Openers tab."""
+    try:
+        from harvey.agents.whatsapp import variant_examples, variant_stats
+        state = _state()
+        await state.init_db()
+        active = []
+        try:
+            from harvey.config import load_config
+            wa = load_config().channels.whatsapp
+            active = wa.opener_variants if wa.opener_test else wa.opener_variants[:1]
+        except Exception:
+            pass
+        return {
+            "active": active,
+            "stats": await variant_stats(state),
+            "examples": await variant_examples(state),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def cold_status(
+    *, enabled: bool, paused: str, cold_paused: bool, quiet: bool,
+    cap: int, sent_today: int, left: int,
+    pending: int, approved: int, ready: int, untouched: int,
+) -> dict:
+    """Why cold messages are or aren't going out right now.
+
+    Ordered by what blocks everything else: a switch beats a clock, a clock
+    beats a cap, and an empty queue is only the answer once nothing above it
+    is holding things up. This is the line that explains a quiet day.
+    """
+    if not enabled:
+        return {"tone": "idle", "title": "Canal desligado",
+                "detail": "channels.whatsapp.enabled está como false — nada sai."}
+    if paused:
+        return {"tone": "bad", "title": "Envio pausado",
+                "detail": f"{paused}. Nada sai até você retomar na aba Outbox."}
+    if cold_paused:
+        return {"tone": "bad", "title": "Mensagens frias em pausa",
+                "detail": "cold_paused_until ainda não passou: nenhuma conversa nova é iniciada."}
+    if quiet:
+        return {"tone": "idle", "title": "Horário de silêncio",
+                "detail": "Fora da janela de envio. Volta a mandar quando o silêncio acabar."}
+    if cap <= 0:
+        return {"tone": "bad", "title": "Limite diário zerado",
+                "detail": "max_daily_sends está em 0, então nenhuma mensagem fria sai."}
+    if left <= 0:
+        return {"tone": "good", "title": "Limite do dia atingido",
+                "detail": f"{sent_today} de {cap} mensagens frias hoje. Recomeça amanhã."}
+    if pending:
+        return {"tone": "warn", "title": f"{pending} mensagem(ns) esperando sua aprovação",
+                "detail": "Nada sai antes de você aprovar. Abra o Outbox e decida."}
+    if approved:
+        return {"tone": "good", "title": f"{approved} na fila para sair",
+                "detail": f"Ainda cabem {left} mensagens frias hoje, com intervalos aleatórios."}
+    if ready:
+        return {"tone": "good", "title": f"{ready} contato(s) aguardando redação",
+                "detail": "Harvey escreve a primeira mensagem no próximo ciclo."}
+    if untouched:
+        return {"tone": "good", "title": f"{untouched} negócio(s) ainda virando contato",
+                "detail": "Têm telefone e entram na fila no próximo ciclo."}
+    return {"tone": "warn", "title": "Acabaram os contatos",
+            "detail": "Nenhum negócio novo com celular para abordar. "
+                      "Rode a aba Discover para achar mais."}
+
+
+@app.get("/api/outreach")
+async def get_outreach():
+    """Cold-outreach counters, plus why nothing is going out right now.
+
+    The question behind this tab is "it went quiet — why?", so the counters
+    come with the reason instead of leaving it to be inferred from a chart.
+    """
+    try:
+        from harvey.config import load_config, load_env
+        from harvey.agents.whatsapp import WhatsAppAgent
+        from harvey.main import in_quiet_hours
+
+        state = _state()
+        await state.init_db()
+        config = load_config()
+        wa = config.channels.whatsapp
+        channel = "whatsapp" if wa.enabled else "email"
+
+        stats = await state.cold_outreach_stats(channel)
+        by_day = await state.cold_outreach_by_day(None, channel)   # whole history
+
+        async def queued(status: str) -> int:
+            rows = await query_db(
+                "SELECT COUNT(*) AS n FROM outbox WHERE status = ? AND kind = 'sequence' "
+                "AND COALESCE(channel, 'email') = ?", (status, channel)
+            )
+            return rows[0]["n"] if rows else 0
+
+        pending, approved = await queued("pending_review"), await queued("approved")
+        ready = untouched = 0
+        if wa.enabled:
+            rows = await query_db(
+                "SELECT COUNT(*) AS n FROM prospects WHERE status = 'new' "
+                "AND source = 'whatsapp:business' AND phone != ''"
+            )
+            ready = rows[0]["n"] if rows else 0
+            untouched = len(await state.get_companies_needing_whatsapp_prospect(limit=500))
+
+        cap = sent_today = 0
+        left = 0
+        if wa.enabled:
+            # No brain: only the cap arithmetic is used, which reads state and
+            # config. Keeping it here would be a second copy of the ramp rule.
+            agent = WhatsAppAgent(None, state, config, load_env())
+            cap = await agent.daily_cap()
+            left = await agent.cold_left_today()
+            sent_today = await state.count_outbox_sent_today(
+                channel="whatsapp", kind="sequence"
+            )
+            cold_paused = agent.cold_paused()
+        else:
+            cold_paused = False
+
+        return {
+            "channel": channel,
+            "enabled": wa.enabled,
+            "stats": stats,
+            "by_day": by_day,
+            "cap": {"cap": cap, "sent_today": sent_today, "left": max(0, left)},
+            "queue": {"pending": pending, "approved": approved,
+                      "ready": ready, "untouched": untouched},
+            "status": cold_status(
+                enabled=wa.enabled,
+                paused=await state.get_setting("sending_paused"),
+                cold_paused=cold_paused,
+                quiet=in_quiet_hours(config),
+                cap=cap, sent_today=sent_today, left=left,
+                pending=pending, approved=approved, ready=ready, untouched=untouched,
+            ),
+        }
+    except Exception as e:
+        logger.exception("outreach load failed")
+        return {"error": str(e)}
+
+
 @app.get("/api/prospects")
 async def get_prospects():
     rows = await query_db("SELECT * FROM prospects ORDER BY created_at DESC LIMIT 200")

@@ -1,0 +1,67 @@
+// Sample data for the ProspectBoost admin UI kit (fake).
+window.PB_DATA = {
+  user: { name: 'Ana Souza', handle: 'ana.souza' },
+  agents: [
+    { id: 'prospect-finder', name: 'Prospect Finder', icon: 'sparkles', tone: 'purple', color: 'var(--chart-1)', tasks: 842, rate: 96, avg: '6.2s', desc: 'Finds and qualifies accounts that match your ICP, then hands them to outbound.', teammates: 14, monthly: '31.2K' },
+    { id: 'account-researcher', name: 'Account Researcher', icon: 'user-search', tone: 'pink', color: 'var(--chart-2)', tasks: 310, rate: 99, avg: '11.4s', desc: 'Builds one-page briefs on target accounts: news, tech stack, buying committee.', teammates: 9, monthly: '8.4K' },
+    { id: 'outbound-writer', name: 'Outbound Writer', icon: 'phone-outgoing', tone: 'blue', color: 'var(--chart-3)', tasks: 264, rate: 91, avg: '4.8s', desc: 'Drafts personalized first touches and follow-ups for every sequence step.', teammates: 11, monthly: '12.9K' },
+    { id: 'reply-watch', name: 'Reply Watch', icon: 'clock', tone: 'azure', color: 'var(--chart-4)', tasks: 96, rate: 88, avg: '2.1s', desc: 'Watches inboxes for replies, classifies intent and flags warm leads.', teammates: 6, monthly: '2.7K' },
+    { id: 'lead-router', name: 'Lead Router', icon: 'ticket', tone: 'green', color: 'var(--chart-5)', tasks: 158, rate: 94, avg: '1.6s', desc: 'Routes inbound and qualified leads to the right SDR by territory and load.', teammates: 4, monthly: '4.1K' },
+  ],
+  metrics: [
+    { label: 'Active agents', value: '5', delta: '+1 this month', tone: 'green', chart: { levels: [1, 0.55, 0.25], highlight: 0 } },
+    { label: 'Prospects today', value: '312', delta: '-08% vs yesterday', tone: 'red', chart: { levels: [0.45, 1, 0.5], highlight: 1 } },
+    { label: 'Integrations', value: '4 / 6', delta: '1 needs attention', tone: 'orange', chart: { levels: [0.7, 0.5, 1], highlight: 2 } },
+    { label: 'AI spend (MTD)', value: '18.2K', delta: 'credits', tone: 'blue', deltaTone: 'green', chart: { levels: [0.4, 1, 0.55], highlight: 1 } },
+  ],
+  activity: [
+    { id: 1, icon: 'sparkles', title: 'Prospect Finder added 48 leads to the Q4 SaaS list', time: '3 min ago' },
+    { id: 2, icon: 'user-search', title: 'Account Researcher drafted a brief for Acme Corp', time: '6 min ago' },
+    { id: 3, icon: 'clock', title: 'Reply Watch flagged 3 warm replies needing follow-up', time: '12 min ago' },
+    { id: 4, icon: 'ticket', title: 'Lead Router assigned 24 inbound leads to SDRs', time: '40 min ago' },
+    { id: 5, icon: 'phone-outgoing', title: 'Outbound Writer drafted 8 follow-up emails', time: '1 hr ago' },
+    { id: 6, icon: 'sparkles', title: 'Prospect Finder sent the daily lead digest', time: '3 hr ago' },
+  ],
+  quickActions: [
+    { icon: 'plus', title: 'New agent', action: 'new-agent' },
+    { icon: 'plug', title: 'Add integration', action: 'integration' },
+    { icon: 'user-plus', title: 'Invite teammate', action: 'invite' },
+    { icon: 'blocks', title: 'Browse skills', action: 'skills' },
+  ],
+  triggers: [
+    { icon: 'calendar-clock', title: 'Daily lead digest', sub: 'Tomorrow, 9:00 AM' },
+    { icon: 'refresh-cw', title: 'Weekly list refresh', sub: 'Mon, 8:00 AM' },
+    { icon: 'circle-check', title: 'Inbound reply check', sub: 'Every 15m' },
+  ],
+  integrations: [
+    { letter: 'S', color: '#2F8FE0', name: 'Salesforce', ok: true },
+    { letter: 'H', color: '#F27A3A', name: 'HubSpot', ok: true },
+    { letter: 'G', color: '#E0493A', name: 'Gmail', ok: false },
+    { letter: 'S', color: '#6E3FB0', name: 'Slack', ok: true },
+  ],
+  agentTriggers: [
+    { icon: 'calendar', title: 'Daily lead digest', sub: '09:00, Mon–Fri' },
+    { icon: 'phone', title: 'New call recorded', sub: 'Polls Gong every 5m' },
+    { icon: 'message-circle', title: 'Inbound lead reply', sub: 'Polls inbox every 15m' },
+  ],
+  tasks: [
+    { id: 'tsk_9c206', status: 'queued', trigger: 'schedule.daily', title: 'Send weekly list refresh', agent: 'lead-router', tags: [{ label: 'Trigger: schedule.daily', tone: 'green' }], when: 'Starts in 2h' },
+    { id: 'tsk_9c211', status: 'queued', trigger: 'manual', title: 'Draft Q4 re-engagement sequence', agent: 'outbound-writer', tags: [{ label: 'Outbound Writer', tone: 'blue' }, { label: 'Live', tone: 'orange' }], when: 'Queued 4m ago' },
+    { id: 'tsk_9c198', status: 'running', trigger: 'Gong call recorded', title: 'Enrich account: Acme Corp', agent: 'account-researcher', tags: [{ label: 'Account Researcher', tone: 'pink' }, { label: 'Live', tone: 'orange' }], when: 'Started 2m ago' },
+    { id: 'tsk_9c195', status: 'running', trigger: 'HubSpot webhook', title: 'Route 6 new inbound leads', agent: 'lead-router', tags: [{ label: 'Lead Router', tone: 'green' }, { label: 'Live', tone: 'orange' }], when: 'Started 5m ago' },
+    { id: 'tsk_9c180', status: 'success', trigger: 'schedule.daily', title: 'Send daily lead digest', agent: 'prospect-finder', tags: [{ label: 'Prospect Finder', tone: 'purple' }], when: 'Finished 3h ago' },
+    { id: 'tsk_9c176', status: 'success', trigger: 'manual', title: 'Draft 8 follow-up emails', agent: 'outbound-writer', tags: [{ label: 'Outbound Writer', tone: 'blue' }], when: 'Finished 1h ago' },
+    { id: 'tsk_9c171', status: 'success', trigger: 'webhook.inbound', title: 'Assign 24 leads to SDRs', agent: 'lead-router', tags: [{ label: 'Lead Router', tone: 'green' }], when: 'Finished 40m ago' },
+    { id: 'tsk_9c160', status: 'failed', trigger: 'schedule.daily', title: 'Sync replies from Gmail', agent: 'reply-watch', tags: [{ label: 'Reply Watch', tone: 'azure' }, { label: 'Auth expired', tone: 'red' }], when: 'Failed 20m ago' },
+  ],
+  taskCounts: { queued: 4, running: 3, success: '1,829', failed: 6 },
+  artifacts: [
+    { id: 'a1', kind: 'doc', title: 'Weekly pipeline digest — Oct 20', meta: 'Created by Prospect Finder · Doc' },
+    { id: 'a2', kind: 'sheet', title: 'Q4 SaaS prospects', meta: 'Created by Prospect Finder · Sheet' },
+    { id: 'a3', kind: 'doc', title: 'Acme Corp account brief', meta: 'Created by Account Researcher · Doc' },
+    { id: 'a4', kind: 'sequence', title: 'Re-engagement · 4 steps', meta: 'Created by Outbound Writer · Sequence' },
+    { id: 'a5', kind: 'sheet', title: 'Warm replies — this week', meta: 'Created by Reply Watch · Sheet' },
+    { id: 'a6', kind: 'sequence', title: 'Post-demo follow-up · 3 steps', meta: 'Created by Outbound Writer · Sequence' },
+    { id: 'a7', kind: 'sheet', title: 'SDR routing log', meta: 'Created by Lead Router · Sheet' },
+  ],
+};

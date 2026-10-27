@@ -1,0 +1,58 @@
+<!-- @dsCard group="Components" viewport="700x760" name="Data display" subtitle="Metric tiles, segment meters, activity, rows, table, tasks, kanban, progress, artifacts" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../../styles.css">
+
+
+
+
+<style>body{padding:20px 24px;background:#fff}.sec{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}.lbl{font:var(--type-label);color:var(--text-tertiary)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}</style>
+<script src="../../runtime/react.js"></script>
+<script src="../../runtime/react-dom.js"></script>
+<script src="../../runtime/components.js"></script>
+</head><body><div id="root"></div>
+<script type="text/plain" data-reference-jsx>
+const NS = window.ProspectBoostDesignSystem_668922;
+
+const { MetricCard, SegmentBar, ActivityCard, ActionRow, DataTable, TaskCard, KanbanColumn, ProgressCard, ArtifactCard, IconChip, Card, Button } = NS;
+function Demo() {
+  const rows = [
+    { id: 1, icon: 'sparkles', name: 'Prospect Finder', tasks: 842, rate: 96, color: 'var(--chart-1)', avg: '6.2s' },
+    { id: 2, icon: 'user-search', name: 'Account Researcher', tasks: 310, rate: 99, color: 'var(--chart-2)', avg: '11.4s' },
+    { id: 3, icon: 'phone-outgoing', name: 'Outbound Writer', tasks: 264, rate: 91, color: 'var(--chart-3)', avg: '4.8s' },
+  ];
+  return (<div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:16}}>
+      <MetricCard label="Active agents" value="5" delta="+1 this month" tone="green" chart={{ levels: [1, .55, .25], highlight: 0 }} />
+      <MetricCard label="Prospects found" value="312" delta="-08% vs yesterday" tone="red" chart={{ levels: [.45, 1, .5], highlight: 1 }} />
+      <MetricCard label="Integrations" value="4 / 6" delta="1 needs attention" tone="orange" chart={{ levels: [.7, .5, 1], highlight: 2 }} />
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8,marginBottom:16}}>
+      <ActivityCard icon="sparkles" title="Prospect Finder added 48 leads to Q4 SaaS list" time="3 min ago" />
+      <Card variant="tile" title="Quick actions" style={{gridColumn:'span 2'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+          <ActionRow icon="plus" title="New agent" onClick={() => {}} /><ActionRow icon="plug" title="Add integration" onClick={() => {}} />
+          <ActionRow icon="calendar-clock" title="Daily lead digest" subtitle="Tomorrow, 9:00 AM" trailing={null} /><ActionRow leading={<span style={{width:32,display:'grid',placeItems:'center'}}><span className="pb-status" style={{width:16,height:16,background:'var(--pb-mint-400)'}} /></span>} title="HubSpot" subtitle="Synced 2 min ago" trailing="check" />
+        </div>
+      </Card>
+    </div>
+    <div style={{marginBottom:16}}>
+      <DataTable minWidth={0} columns={[
+        { key: 'name', label: 'Agent', width: '2fr', render: r => <><IconChip icon={r.icon} />{r.name}</> },
+        { key: 'tasks', label: 'Tasks' },
+        { key: 'rate', label: 'Success rate', width: '1.3fr', render: r => <><SegmentBar value={r.rate} color={r.color} /><span>{r.rate}%</span></> },
+        { key: 'avg', label: 'Avg duration' },
+      ]} rows={rows} />
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8,alignItems:'start'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        <KanbanColumn status="running" title="Running" count={2}>
+          <TaskCard trigger="Gong call recorded" title="Enrich account: Acme Corp" tags={[{ label: 'Account Researcher', tone: 'pink' }, { label: 'Live', tone: 'orange' }]} when="Starts in 2h" id="tsk_9c206" />
+        </KanbanColumn>
+        <Button variant="soft" block iconLeft="plus">Add Task</Button>
+      </div>
+      <ProgressCard title="Today task" value={70} />
+      <ArtifactCard kind="sheet" title="Q4 SaaS prospects" meta="Created by Prospect Finder · Sheet" />
+    </div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script><script src="../../runtime/references_components_data_data.card.js"></script></body></html>

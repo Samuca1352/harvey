@@ -9,6 +9,24 @@ minor versions can still change behaviour.
 
 ### Added
 
+- **Cold-outreach numbers on Today.** The dashboard's Today tab opens with the
+  counters that say whether prospecting is working: today's cold messages and
+  today's answers, the all-time totals (counted per person, not per message),
+  how many are still silent, and today's sends against the daily cap, over a
+  per-day bar of the whole history — cold messages and the replies they got,
+  silent days kept. Answers are dated by when they arrived, so a reply today
+  to someone messaged last week counts today. Beside them is the one line
+  that explains a quiet day — channel off, sending paused, `cold_paused_until`,
+  quiet hours, daily cap reached, messages waiting for approval, or no
+  businesses left to message. Served by `GET /api/outreach`
+  (`state.cold_outreach_stats` / `cold_outreach_by_day`).
+
+- **Local design system.** Recovered canonical components, tokens, guidelines and
+  offline visual references under `design-system/`, with a public React entrypoint,
+  imported adherence lint, reproducible build and CI validation. The operational
+  dashboard keeps its existing theme and behavior. See
+  [the migration report](design-system/TRIAGE.md).
+
 - **WhatsApp channel (WA-AKG).** Set `channels.whatsapp.enabled: true` to
   message businesses on WhatsApp through a self-hosted
   [WA-AKG](https://github.com/mrifqidaffaaditya/WA-AKG) gateway

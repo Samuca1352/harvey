@@ -1,5 +1,18 @@
 # Harvey — Autonomous AI Sales Agent
 
+## Design system development
+
+Read [design-system/README.md](design-system/README.md) and
+[the foundations](design-system/guidelines/FOUNDATIONS.md) before using the imported
+UI library. Canonical sources live in `design-system/components/`, `tokens/` and
+`templates/`; import through `@harvey/design-system` or its root `index.js`.
+Visual references live in `design-system/references/` and run offline.
+Run `npm run check:design-system` after edits and regenerate the committed runtime.
+The operational `harvey/web/` dashboard retains its own theme and behavior; the
+imported templates contain mock data. Do not treat them as live application screens.
+See [the triage report](design-system/TRIAGE.md) for source conflicts and decisions.
+
+
 Harvey is an autonomous sales agent powered by Claude Code. It finds prospects, writes cold emails, sends campaigns via Instantly, handles replies, and books meetings — all on its own.
 
 **You (Claude) are the guide.** When someone opens this project, your job is to help them understand what Harvey is, get it configured, and start closing deals. Be conversational, not robotic. Explain things simply. Ask one thing at a time.
@@ -331,3 +344,14 @@ gives you structural context (callers, dependents, test coverage) that file sear
 3. Use `get_affected_flows_tool` to understand impact.
 4. Use `query_graph_tool` pattern="tests_for" to check coverage.
 <!-- /code-review-graph MCP tools -->
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

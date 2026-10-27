@@ -1,0 +1,1831 @@
+[
+  {
+    "source": ".thumbnail",
+    "category": "interno da ferramenta",
+    "sha256": "c4db38a99484809880d5c51f9450411191bf889a04b1542e04446fdfd813a18a",
+    "destination": null,
+    "reason": "Miniatura WebP interna; thumbnail.html preservado."
+  },
+  {
+    "source": "SKILL.md",
+    "category": "interno da ferramenta",
+    "sha256": "90958e671062182c6dcae20ed1ea1d2d128a2b10ddbe37133c373add858564b2",
+    "destination": null,
+    "reason": "Instruções de operação do Claude Design; conteúdo de design está no guia preservado."
+  },
+  {
+    "source": "_adherence.oxlintrc.json",
+    "category": "canônico",
+    "sha256": "f6853816dc75626948fe79ba2537fdb77fd8e3f94106049f09821ffc087435a9",
+    "destination": "lint/adherence.json",
+    "reason": "Config de aderência resgatada e consumida pelo ESLint da raiz."
+  },
+  {
+    "source": "_ds_bundle.js",
+    "category": "derivado ou duplicado",
+    "sha256": "0419e885c4fa61b7126fa44b0853365bedac632c548acea2625c00b06657d4d6",
+    "destination": null,
+    "reason": "Bundle compilado: todos os 44 hashes de fontes coincidem; reconstruído a partir dos fontes."
+  },
+  {
+    "source": "_ds_manifest.json",
+    "category": "interno da ferramenta",
+    "sha256": "b388ea161816b6756be356e03bc919bd4c0d955f5982958f54d3a846fe03af7b",
+    "destination": null,
+    "reason": "Índice gerado da ferramenta, sem fonte exclusiva."
+  },
+  {
+    "source": "assets/icons/arrow-left.svg",
+    "category": "canônico",
+    "sha256": "9230382981cb4a91a23cda75babdd641927425abe92d7ef1372135972c00e6c0",
+    "destination": "assets/icons/arrow-left.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/arrow-right.svg",
+    "category": "canônico",
+    "sha256": "b886e130dca74f6a39fdc73d80ae1425f9cbbaae263acef8e432e3b5250a7c84",
+    "destination": "assets/icons/arrow-right.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/arrow-up-right.svg",
+    "category": "canônico",
+    "sha256": "183fc24431f886c953ca218ab24e7cf91635f1609853766268fce725b43fd11e",
+    "destination": "assets/icons/arrow-up-right.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/asterisk.svg",
+    "category": "canônico",
+    "sha256": "7bb5337688e1349cc6d17c5d7a0e7e0fb0cdc87fc3a46565a890524f4681efe1",
+    "destination": "assets/icons/asterisk.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/bell.svg",
+    "category": "canônico",
+    "sha256": "b4db0d3c9b73fc3cc834506cec1346de4a9df3b322c3ac777b1efc01ae4ac441",
+    "destination": "assets/icons/bell.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/blocks.svg",
+    "category": "canônico",
+    "sha256": "17c2329ce7ffe0993ac50a8c81207f9a951b19546672299b335112f2f166dda5",
+    "destination": "assets/icons/blocks.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/bot.svg",
+    "category": "canônico",
+    "sha256": "44c0104eb67b167fbfe8c589f8513fce8e653e78da8769e2215529509126fa43",
+    "destination": "assets/icons/bot.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/briefcase.svg",
+    "category": "canônico",
+    "sha256": "8c8e7a01797a6fe2d64b4a618f0d17dabcf712895438eede4f8c9d6b61497736",
+    "destination": "assets/icons/briefcase.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/building-2.svg",
+    "category": "canônico",
+    "sha256": "dccd6e5afe5b8ba5e59641099fbd24befd8bffe9da1fe823ff75706d85843344",
+    "destination": "assets/icons/building-2.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/calendar-clock.svg",
+    "category": "canônico",
+    "sha256": "8170f368805d5bb05342707a17224c4b1b0cb901a8e69c3c3d996dcffadfa56c",
+    "destination": "assets/icons/calendar-clock.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/calendar.svg",
+    "category": "canônico",
+    "sha256": "4add1b13348a85e1dba09c5be935e05c4e2c124e45e0c3c00382b75a94c8ba11",
+    "destination": "assets/icons/calendar.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/chart-column.svg",
+    "category": "canônico",
+    "sha256": "65f5e76d68054d150405c9b0bc99a8880110ac5c891c4460588553223eddc132",
+    "destination": "assets/icons/chart-column.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/check.svg",
+    "category": "canônico",
+    "sha256": "f2b7ee91499845c22ed60e1ef96dbe940549ec10f1ce9fee6f8f351df97e2341",
+    "destination": "assets/icons/check.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/chevron-down.svg",
+    "category": "canônico",
+    "sha256": "f895f3b92960bdcc1cf11a238109e86d06dc6e624e70102863942742997eb578",
+    "destination": "assets/icons/chevron-down.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/chevron-left.svg",
+    "category": "canônico",
+    "sha256": "6b98f96820624b64f0066d83b73baa6b3f8f4d4b93b2a2798e16cd984d728906",
+    "destination": "assets/icons/chevron-left.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/chevron-right.svg",
+    "category": "canônico",
+    "sha256": "816d142b779c86c7e85150daf2f580f6ec71ea6fe8f62045d91cfe9c4e2f30b3",
+    "destination": "assets/icons/chevron-right.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/chevron-up.svg",
+    "category": "canônico",
+    "sha256": "d8326ea96373d40793ac71a0a6587ed9f5d3888d477a08a66c348745e10e2f4e",
+    "destination": "assets/icons/chevron-up.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/circle-alert.svg",
+    "category": "canônico",
+    "sha256": "015c0828936db14fe4631ce9f6a3f476bbda9cfedad83a20c7bdecc8836e32ee",
+    "destination": "assets/icons/circle-alert.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/circle-check.svg",
+    "category": "canônico",
+    "sha256": "da9d8922a53f84decc051d136147310719e2cccac2f37d80b0f64f3538c79338",
+    "destination": "assets/icons/circle-check.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/circle-help.svg",
+    "category": "canônico",
+    "sha256": "82e9284c69badf2105f1a63d3278426b576179a0b93c14dcda0c2d0fadb11823",
+    "destination": "assets/icons/circle-help.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/circle-x.svg",
+    "category": "canônico",
+    "sha256": "521a06168909b8e95ed1d39a1fb61195bcf85713d3d46d5cfd2f294168bc7d0b",
+    "destination": "assets/icons/circle-x.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/clock.svg",
+    "category": "canônico",
+    "sha256": "23e386c60fde6c431e792c51865f3eef348aac1d76731e65d1efc8ce8984e519",
+    "destination": "assets/icons/clock.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/columns-3.svg",
+    "category": "canônico",
+    "sha256": "65187957b1a73d090e6520936a05594c247f5b5ece416910aa71eeb62cd52f6e",
+    "destination": "assets/icons/columns-3.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/copy.svg",
+    "category": "canônico",
+    "sha256": "866d4d76d8aa73a48a294f7748b9f057e3ff8bfbe4023316f797939536f45075",
+    "destination": "assets/icons/copy.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/download.svg",
+    "category": "canônico",
+    "sha256": "fb9b8250145c02662b3f36232875064e9bf7fba0bf1700ae1f00b977d972f143",
+    "destination": "assets/icons/download.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/ellipsis-vertical.svg",
+    "category": "canônico",
+    "sha256": "9c178f5c5078b3c0ed5f74e64645bfd9745611b75109b8ea7db77fbc6319b815",
+    "destination": "assets/icons/ellipsis-vertical.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/ellipsis.svg",
+    "category": "canônico",
+    "sha256": "102557079cfffb757e0291c77e6e60850624b6bbde3bfb60cdf56822a747ff96",
+    "destination": "assets/icons/ellipsis.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/external-link.svg",
+    "category": "canônico",
+    "sha256": "a7d801899359fe1e1a0bb49e333f793e96bdc8fba362f30b530ae09284b47d90",
+    "destination": "assets/icons/external-link.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/eye.svg",
+    "category": "canônico",
+    "sha256": "875035c8cd47fc4c86bc1807f85a1ff232b7ccd5e2547c1cc48be36c83220876",
+    "destination": "assets/icons/eye.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/file-spreadsheet.svg",
+    "category": "canônico",
+    "sha256": "83876ce2870164b35692296367d5d5d806ed133aab82b57d3565726299c30321",
+    "destination": "assets/icons/file-spreadsheet.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/file-stack.svg",
+    "category": "canônico",
+    "sha256": "87912936e3e875ae95bf1b4644749730ea842465957e7c3180a35e71b1ce3cbf",
+    "destination": "assets/icons/file-stack.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/file-text.svg",
+    "category": "canônico",
+    "sha256": "86523a193aef928d17b9963e4a81de37d3684bc1bd7ed161db58243ecb93426a",
+    "destination": "assets/icons/file-text.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/filter.svg",
+    "category": "canônico",
+    "sha256": "286cd8299383a4b6729e3b8ba424cd3b56fbf62510d61f01b2ec1ba120e87634",
+    "destination": "assets/icons/filter.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/folder.svg",
+    "category": "canônico",
+    "sha256": "aebe8654e8f98b2e5ba50fa9c937bc0f27059351e6379be51f6c980c6965632f",
+    "destination": "assets/icons/folder.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/globe.svg",
+    "category": "canônico",
+    "sha256": "6801e6499588326ba82e6d1857b44c1bd11cbb77b69145d640fcab2244f79c08",
+    "destination": "assets/icons/globe.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/house.svg",
+    "category": "canônico",
+    "sha256": "489f361844d076d05bd67b1e884ce8ebe52dbfcb207312b7118a9187aa43e65e",
+    "destination": "assets/icons/house.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/inbox.svg",
+    "category": "canônico",
+    "sha256": "c95be9f977295d21bd1c319bc4bbfe00f6803caa2f416827a21dd19f24278adc",
+    "destination": "assets/icons/inbox.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/info.svg",
+    "category": "canônico",
+    "sha256": "4b0f5050604e73aea83f540b4f8d0e1825eb29cf11c079fe98a6a2162f44af6d",
+    "destination": "assets/icons/info.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/layers.svg",
+    "category": "canônico",
+    "sha256": "ae78fc9f7f45088e0afd2ded7c71b36c4b157c9f61fcacbfddf76ae1dd40d46c",
+    "destination": "assets/icons/layers.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/layout-grid.svg",
+    "category": "canônico",
+    "sha256": "c906758ae0f2ce6073a817eca8605268448cd2fa21278284df6732feb28519bc",
+    "destination": "assets/icons/layout-grid.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/lightbulb.svg",
+    "category": "canônico",
+    "sha256": "eb4724f907dc9e17577082a9cafdab5ac152cfb1ca74e92b821b4875ea1648ef",
+    "destination": "assets/icons/lightbulb.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/link.svg",
+    "category": "canônico",
+    "sha256": "09c386c189e8c5dc9e6e1eed8b25d1b04f9ffbc63665f6e3c06392133f80cda5",
+    "destination": "assets/icons/link.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/list-filter.svg",
+    "category": "canônico",
+    "sha256": "77b4dcdafaa4f52bb5bcb9291ce473a49a8433af0d36727270f55fcf09edf62a",
+    "destination": "assets/icons/list-filter.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/list.svg",
+    "category": "canônico",
+    "sha256": "1ef80727f7def7b6dfb5da5f8fd7fc635a11235e462cd7035fa9ac17b7570aba",
+    "destination": "assets/icons/list.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/log-out.svg",
+    "category": "canônico",
+    "sha256": "7bb9ee1d212a2070a9193fbc52698c97ebfcbc3696b147b6f7490920b1cd1743",
+    "destination": "assets/icons/log-out.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/mail.svg",
+    "category": "canônico",
+    "sha256": "2ff6b9d27454090c02e711c6b7923690e85edc3908f2cadf83767e8d98001f20",
+    "destination": "assets/icons/mail.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/menu.svg",
+    "category": "canônico",
+    "sha256": "89fe69ceac4069bcb18bc772cd6b90c7d8a4360872be449fad635b3a57918fab",
+    "destination": "assets/icons/menu.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/message-circle.svg",
+    "category": "canônico",
+    "sha256": "83fa19593ec1b411ac9e6401eb54229cfc51054d094b2e4f47e10b8783e2f642",
+    "destination": "assets/icons/message-circle.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/mic.svg",
+    "category": "canônico",
+    "sha256": "2c26f98c11189b64c5f7f91216c8498ac0c2a2382af56a07f54a4f8ecfd95e56",
+    "destination": "assets/icons/mic.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/minus.svg",
+    "category": "canônico",
+    "sha256": "2ca43132a8c82d24361b461d6cdecfbc9b5cfd3525e8742f73d208db2a94e591",
+    "destination": "assets/icons/minus.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/moon.svg",
+    "category": "canônico",
+    "sha256": "c7c354e008cf24f6795dcc6902d881bb641cc67fd6087a74ac6940d15c71a451",
+    "destination": "assets/icons/moon.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/notebook-pen.svg",
+    "category": "canônico",
+    "sha256": "cef7dce3b96664b01c41ee9ca77c959554b26a1b6193e2a30e423b10c39c2cba",
+    "destination": "assets/icons/notebook-pen.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/panel-left-close.svg",
+    "category": "canônico",
+    "sha256": "30642d8d2b2033662f376b8792e46391e6d13875fb3cba33088e28163ecb300b",
+    "destination": "assets/icons/panel-left-close.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/panel-left-open.svg",
+    "category": "canônico",
+    "sha256": "3ac6ad76107f0a7573c69f1a677d9067f69cfd35fa77db27eb4330f6a11de723",
+    "destination": "assets/icons/panel-left-open.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/paperclip.svg",
+    "category": "canônico",
+    "sha256": "07f9968a55d60e3a3c1c230aa56e50859561b7b35d4e22fc95cc59a14a8bd6d2",
+    "destination": "assets/icons/paperclip.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/pause.svg",
+    "category": "canônico",
+    "sha256": "1c36732753fa88c8cfa2f61199029c32f29548dcfcb876ea8750159df58c5fba",
+    "destination": "assets/icons/pause.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/pencil.svg",
+    "category": "canônico",
+    "sha256": "51695fd7d0d8b7a555d4d60a9c3c1165e39c741d346536be232182e04139d62c",
+    "destination": "assets/icons/pencil.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/phone-outgoing.svg",
+    "category": "canônico",
+    "sha256": "792674389a2f07fb5aef51b697480dedad53d42b71629eb4414fd7c145cad850",
+    "destination": "assets/icons/phone-outgoing.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/phone.svg",
+    "category": "canônico",
+    "sha256": "e04453b646c2429975c4a84ce66cf8f9d27ecb7d7be7323696c6152edde9d194",
+    "destination": "assets/icons/phone.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/play.svg",
+    "category": "canônico",
+    "sha256": "354efbd280437bfb769c20de136135b078c7085f52c080337a6fb0a184bdd4e4",
+    "destination": "assets/icons/play.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/plug.svg",
+    "category": "canônico",
+    "sha256": "d916cb8ed178d1613f8ce2eb01a31a77937a3c43316768f40b19efd733db2e4f",
+    "destination": "assets/icons/plug.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/plus.svg",
+    "category": "canônico",
+    "sha256": "130213bad5b7f5795ec497c347985fdb8599bfd5c0cc7fc879a7d34e1ed4eecc",
+    "destination": "assets/icons/plus.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/refresh-cw.svg",
+    "category": "canônico",
+    "sha256": "cfb84276f9cfb8d4f27c9817d03d99acfb92a3efd5bd1316b4ae43d3141419e8",
+    "destination": "assets/icons/refresh-cw.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/rocket.svg",
+    "category": "canônico",
+    "sha256": "6825694fc04a552c28ee7dcfd698f74a231ee857c8dcaa927e6042b9b33edf50",
+    "destination": "assets/icons/rocket.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/rotate-ccw.svg",
+    "category": "canônico",
+    "sha256": "f0e4372774133d54bec0eed56cd405a93ac63de3cb1a061983c472f6324c8b0b",
+    "destination": "assets/icons/rotate-ccw.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/search.svg",
+    "category": "canônico",
+    "sha256": "474c781bc1c60770720f84014b27837ac9b54c94d453d51c0bab7eccd45b03c7",
+    "destination": "assets/icons/search.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/send.svg",
+    "category": "canônico",
+    "sha256": "27c78db16b2d6714285f238d94c8cd9e99501c44f8b4cc20a667a99c6441c52e",
+    "destination": "assets/icons/send.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/settings.svg",
+    "category": "canônico",
+    "sha256": "e182cc0400d5d72853a2652b5768e517444e95e391a855277b90994009994c9f",
+    "destination": "assets/icons/settings.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/share-2.svg",
+    "category": "canônico",
+    "sha256": "fadc3d40509ac7bd93ccaf3cfbdda3fb7ab5f4166e451eb746d6ce83c6f57b78",
+    "destination": "assets/icons/share-2.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/sliders-horizontal.svg",
+    "category": "canônico",
+    "sha256": "64c2ec4f1b32489503620025c8a3ef348d1144a85f3f1cae3c67e370d0c61259",
+    "destination": "assets/icons/sliders-horizontal.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/sparkles.svg",
+    "category": "canônico",
+    "sha256": "fc2e2118ba5451ca4a3492ff2e459f68f6413968492340eac90eb474f9b25fab",
+    "destination": "assets/icons/sparkles.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/square-pen.svg",
+    "category": "canônico",
+    "sha256": "8d8286e1e7467fa4dae558b4bffa6ae9b0ff542993c2e61bab75e7d9a5da7a89",
+    "destination": "assets/icons/square-pen.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/star.svg",
+    "category": "canônico",
+    "sha256": "147e2a64d68f7dcf095d7008c5e86b57165dfca86ef8e522b798307dd4ff2c10",
+    "destination": "assets/icons/star.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/sun.svg",
+    "category": "canônico",
+    "sha256": "c040e5fbf18a2e72380c0d515469352c8d362e1370a4cde5294cd28b95a6e193",
+    "destination": "assets/icons/sun.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/target.svg",
+    "category": "canônico",
+    "sha256": "0b2ee97131d82452a1bdc57023323615f393fb313fc7c1a102217c76e7555399",
+    "destination": "assets/icons/target.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/ticket.svg",
+    "category": "canônico",
+    "sha256": "7fb3fddc36c1e605382260c25282c707541755514990b7ccfa359fb1a6793c41",
+    "destination": "assets/icons/ticket.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/trash-2.svg",
+    "category": "canônico",
+    "sha256": "3d97daf0f64ed3ef50f9b2e47bf2bdfb086815a63475bd96a60936d06c8f69f0",
+    "destination": "assets/icons/trash-2.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/trending-down.svg",
+    "category": "canônico",
+    "sha256": "78c7c0e0c2d45793f95c6bb207e55cc71a538c4dc1002ee57b1d626fe476b1b6",
+    "destination": "assets/icons/trending-down.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/trending-up.svg",
+    "category": "canônico",
+    "sha256": "dce8427700311b9ae868b7ebbcaa6607160c7ebae36db4ebd8886b61d22bd4d3",
+    "destination": "assets/icons/trending-up.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/triangle-alert.svg",
+    "category": "canônico",
+    "sha256": "8623c1baa45c60a8411ac7304500a65605bad9eaf75749020e20bc765a16f091",
+    "destination": "assets/icons/triangle-alert.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/upload.svg",
+    "category": "canônico",
+    "sha256": "1952aae875325f7b1c4e9e94744bb2b573e90e6758ceb50dcfed1b594ea48794",
+    "destination": "assets/icons/upload.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/user-plus.svg",
+    "category": "canônico",
+    "sha256": "1d9b73b7966c178177f209e1ae74d7736e1b6d4412340a22c9797c2d2424a73a",
+    "destination": "assets/icons/user-plus.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/user-search.svg",
+    "category": "canônico",
+    "sha256": "0b37ead3b1667175b45f195ecc171d42a32b4b89790f61d32c1d82dfa9108d6e",
+    "destination": "assets/icons/user-search.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/user.svg",
+    "category": "canônico",
+    "sha256": "3d836329d4d8c8b163d2c10b86093e752aa081f8889d7f531f48a9a34d4985b2",
+    "destination": "assets/icons/user.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/users.svg",
+    "category": "canônico",
+    "sha256": "0aafe72a9b209c70b49e5d81f93c2d9c559af1d16cffb68a2f1e8153f5497950",
+    "destination": "assets/icons/users.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/waypoints.svg",
+    "category": "canônico",
+    "sha256": "fbbdc6abd77a9ca50140b997594fd9f88cfadb69d463ef2cc974a3832e8fa090",
+    "destination": "assets/icons/waypoints.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/x.svg",
+    "category": "canônico",
+    "sha256": "8c02a6625d813d8d09512e78cac44590a458463e6ffdb1460824979d91683908",
+    "destination": "assets/icons/x.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "assets/icons/zap.svg",
+    "category": "canônico",
+    "sha256": "2b9c776190b69bacc1acf6fa7ce509b5a468b6309e0e7342b71778add1829cdf",
+    "destination": "assets/icons/zap.svg",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/components.css",
+    "category": "canônico",
+    "sha256": "695fdac8c9a7add061070952e130255f05756aae5001260254f6c4ff9fd18319",
+    "destination": "components/components.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Avatar.d.ts",
+    "category": "canônico",
+    "sha256": "977bfeeaec66f812d113c426c1991f44a2932e4b6841be9cbe6ef552a7c177aa",
+    "destination": "components/core/Avatar.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Avatar.jsx",
+    "category": "canônico",
+    "sha256": "825802ee96cc41e5d4c148179710b97352572b88748e8d210a37ce143ac54033",
+    "destination": "components/core/Avatar.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Avatar.prompt.md",
+    "category": "canônico",
+    "sha256": "60662b59d16d84a549a6cdba63106ec9eb1a9b4c164810b8784e41ccbbf4aade",
+    "destination": "components/core/Avatar.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Badge.d.ts",
+    "category": "canônico",
+    "sha256": "046226ab09146a0820fd9aab6fe3df0e50cd6122691d4f1a8387db949a1d7672",
+    "destination": "components/core/Badge.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Badge.jsx",
+    "category": "canônico",
+    "sha256": "bc2795bf052f7c4961e2d9fb6ea0177c433a991278942073ceaedd88ecd288e0",
+    "destination": "components/core/Badge.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Badge.prompt.md",
+    "category": "canônico",
+    "sha256": "3a80f369303e0aa89364d580f7becbe7f1a270b72f0a119d71a853f67f559119",
+    "destination": "components/core/Badge.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Button.d.ts",
+    "category": "canônico",
+    "sha256": "bc5f61a7a5f7f055ff7f0e9ab9a1ad470e8c06efa93dbe43cf3a464e8c992eaa",
+    "destination": "components/core/Button.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Button.jsx",
+    "category": "canônico",
+    "sha256": "e20d73a027093c69cd64a93c796bba59179bed237ee60056aab6feeca92df712",
+    "destination": "components/core/Button.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Button.prompt.md",
+    "category": "canônico",
+    "sha256": "364710f896c4937a21a9afcd9d21ae1ff3a4d81dad4cb41864b8c2c3e6dc66ef",
+    "destination": "components/core/Button.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Card.d.ts",
+    "category": "canônico",
+    "sha256": "98eca4e39551fbd475156338ea89c29e35e3437ce66e9e1e0a26856b41d2c46a",
+    "destination": "components/core/Card.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Card.jsx",
+    "category": "canônico",
+    "sha256": "dc46fc8278f0905a0f82df95df33c5659f1bddbeeeb5553b1df8f46d1fdebc5d",
+    "destination": "components/core/Card.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Card.prompt.md",
+    "category": "canônico",
+    "sha256": "222727321b95fb10721f6e37322896cce358e9571a7c2a297dc582e087a54b07",
+    "destination": "components/core/Card.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Eyebrow.d.ts",
+    "category": "canônico",
+    "sha256": "0162b4a679c91b0d02479c3cfc983c7ca5e3ee842058534bee3d6cc869fa9e5a",
+    "destination": "components/core/Eyebrow.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Eyebrow.jsx",
+    "category": "canônico",
+    "sha256": "3569fde14104ea3f59b9f532cd67658594bf099a84b8a325324fa14bdffa2a1b",
+    "destination": "components/core/Eyebrow.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Eyebrow.prompt.md",
+    "category": "canônico",
+    "sha256": "1c498810a79bae4b9d4dbc61b0efc2b6c17c88ba1364429fa5d6379d33c2d1d0",
+    "destination": "components/core/Eyebrow.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Icon.d.ts",
+    "category": "canônico",
+    "sha256": "5fcfb41aef90479713d36e4d9fc9ee018f249c4b7dc16046e5c6b0d86fbc301e",
+    "destination": "components/core/Icon.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Icon.jsx",
+    "category": "canônico",
+    "sha256": "d6ead33d7ef92ad2bece10c13f3c78ce2f2f0418adb878e85b236872545ceb64",
+    "destination": "components/core/Icon.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Icon.prompt.md",
+    "category": "canônico",
+    "sha256": "a029e8f4b617e23c4ffd0d5b65b67d180f01adee6e2a2b2544e580503d6fd144",
+    "destination": "components/core/Icon.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/IconButton.d.ts",
+    "category": "canônico",
+    "sha256": "cdae2deac4c6ce0b16669c583f76bad339304fecd2718c35243d2ca9539c7104",
+    "destination": "components/core/IconButton.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/IconButton.jsx",
+    "category": "canônico",
+    "sha256": "4eed10eadf28e4d94b00bd1b6264b9e5213cfdaecded658b8733ec4f9b11c021",
+    "destination": "components/core/IconButton.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/IconButton.prompt.md",
+    "category": "canônico",
+    "sha256": "37aa718ec3b270bbcc2501d69e936369e041bf12cd6b74462eb0c759491d50ff",
+    "destination": "components/core/IconButton.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/IconChip.d.ts",
+    "category": "canônico",
+    "sha256": "7f368dcb223c581e35a536504b5562f51a48ef2b08128d26cd148a33ea3154a3",
+    "destination": "components/core/IconChip.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/IconChip.jsx",
+    "category": "canônico",
+    "sha256": "f26612288b2efa25359ea90ece8a31d9df7a5b8a09163e7831c91eed95c92371",
+    "destination": "components/core/IconChip.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/IconChip.prompt.md",
+    "category": "canônico",
+    "sha256": "6a1a3fd345f3333e590ae085f818feca9675f2952ae002537eb3c6d046362912",
+    "destination": "components/core/IconChip.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Kbd.d.ts",
+    "category": "canônico",
+    "sha256": "e13ef3e6f29434b2317e07e6ac41ba1ffda345016485afd2b9a5c07df808945e",
+    "destination": "components/core/Kbd.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Kbd.jsx",
+    "category": "canônico",
+    "sha256": "39fca6bbd7b9293587bad5b31934d3db79187b268929c6b968ed1cab300514bd",
+    "destination": "components/core/Kbd.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/Kbd.prompt.md",
+    "category": "canônico",
+    "sha256": "a137bf1abf8e47f52e78483a0bfc4ae20e41567c1bf69158e9095d9366e8f0e6",
+    "destination": "components/core/Kbd.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/StatusDot.d.ts",
+    "category": "canônico",
+    "sha256": "8a8e61171df57de481160b3332760ba0eb3536700b0fc0df313607bfa514b9f0",
+    "destination": "components/core/StatusDot.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/StatusDot.jsx",
+    "category": "canônico",
+    "sha256": "41109461d6a4316936e252c89bf3d3c6300d813763d4070e07169177d7dba46a",
+    "destination": "components/core/StatusDot.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/StatusDot.prompt.md",
+    "category": "canônico",
+    "sha256": "17e3569bb3d7e46b29874701cf56e29f37a2743243cade91ed804cddd370dad9",
+    "destination": "components/core/StatusDot.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/core/core.card.html",
+    "category": "canônico",
+    "sha256": "a6a4cc74cfc51365566896dd839996128c7d83b41a19c72a6c384b721d88b57f",
+    "destination": "references/components/core/core.card.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "components/core/icons.js",
+    "category": "canônico",
+    "sha256": "f3e77f4b713002fc4091f84944957f755f08e78cda32a99207058c3b1be2256b",
+    "destination": "components/core/icons.js",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ActionRow.d.ts",
+    "category": "canônico",
+    "sha256": "971cee2d1108be0353a98c6b249f207bbfe359a212db8d82749f58f31a66492c",
+    "destination": "components/data/ActionRow.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ActionRow.jsx",
+    "category": "canônico",
+    "sha256": "ce9450c00a0b53da145613a4abb30a6675390e2bcf843bfed46fe093a0667ebc",
+    "destination": "components/data/ActionRow.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ActionRow.prompt.md",
+    "category": "canônico",
+    "sha256": "4147dd3c868859f8bcd1adf1b73256090cbb4bdcb4c16a543108035850fe520c",
+    "destination": "components/data/ActionRow.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ActivityCard.d.ts",
+    "category": "canônico",
+    "sha256": "b14a1f9611984d2237990ca41352a0f65383f1baadabf957307b42fb8e8fa531",
+    "destination": "components/data/ActivityCard.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ActivityCard.jsx",
+    "category": "canônico",
+    "sha256": "3716c2204d59eefbc8d9f9a61486b1e8f8d0256266e84f46237ff6f7179f4786",
+    "destination": "components/data/ActivityCard.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ActivityCard.prompt.md",
+    "category": "canônico",
+    "sha256": "9717f7aaa47148f7c7dbb248fcc6ce2976adcaf8d704bc0552e960b2594601c7",
+    "destination": "components/data/ActivityCard.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ArtifactCard.d.ts",
+    "category": "canônico",
+    "sha256": "d42eef6490f118acaa15514c194b457fe09b39b17a152c254da57c124c325b79",
+    "destination": "components/data/ArtifactCard.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ArtifactCard.jsx",
+    "category": "canônico",
+    "sha256": "652604b5dc9b6b98c6153d41f770bbb339e5ab1b6d2e4f07fe153c4a5db1b53d",
+    "destination": "components/data/ArtifactCard.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ArtifactCard.prompt.md",
+    "category": "canônico",
+    "sha256": "7b1cb50970222ab46ce737b4c5310f643779ef75da81ad9c777160a08cd0d0ac",
+    "destination": "components/data/ArtifactCard.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/DataTable.d.ts",
+    "category": "canônico",
+    "sha256": "8d4539835186e32df160821c1be856901674c634f5c0accbaec423eb59803c79",
+    "destination": "components/data/DataTable.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/DataTable.jsx",
+    "category": "canônico",
+    "sha256": "ea58e1dac5b296fb4bdd67eaf001e873ab241747d43b64a3d7e14402b63f99ff",
+    "destination": "components/data/DataTable.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/DataTable.prompt.md",
+    "category": "canônico",
+    "sha256": "173b1842bd8145749cc3e4573a76568649728a0cb9254115a2eaa93cceee980f",
+    "destination": "components/data/DataTable.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/KanbanColumn.d.ts",
+    "category": "canônico",
+    "sha256": "f052e5382db23204e55318c1f04175460ab43c099d16b2a049a78be80cf22846",
+    "destination": "components/data/KanbanColumn.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/KanbanColumn.jsx",
+    "category": "canônico",
+    "sha256": "7b294558dd59af829f1b97ab43f1c25372ffaa0bc7373f275fd7041e026bea61",
+    "destination": "components/data/KanbanColumn.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/KanbanColumn.prompt.md",
+    "category": "canônico",
+    "sha256": "c5ffce93727b8942401f1340fca4d517f5d7d7fcaf24e9b6876c901f74131cd6",
+    "destination": "components/data/KanbanColumn.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/MetricCard.d.ts",
+    "category": "canônico",
+    "sha256": "00dde9cae85f82061542cae026f360877ce436f757a0dc4ce2ee1f8e317cb826",
+    "destination": "components/data/MetricCard.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/MetricCard.jsx",
+    "category": "canônico",
+    "sha256": "96b4181733256cd5b0137c3373d4fc038e9ec8519a41274c27e35c53b8636834",
+    "destination": "components/data/MetricCard.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/MetricCard.prompt.md",
+    "category": "canônico",
+    "sha256": "ef973c594bcaed6af56e4896cb02528ed24178f5538cf31deceb08073db22ddb",
+    "destination": "components/data/MetricCard.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ProgressCard.d.ts",
+    "category": "canônico",
+    "sha256": "b33a16c6efc2b91fa538ea8cfeff7c55d3dae4433489567605d6ce230e6e18d7",
+    "destination": "components/data/ProgressCard.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ProgressCard.jsx",
+    "category": "canônico",
+    "sha256": "47d042e35fa3ee2ae663de237394887dd27ae97163000fc6c808c0408943e105",
+    "destination": "components/data/ProgressCard.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/ProgressCard.prompt.md",
+    "category": "canônico",
+    "sha256": "bc178215bd005b92582f2ba6cb991ff16d2837a77686af61214e4b37fbe40ef4",
+    "destination": "components/data/ProgressCard.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/SegmentBar.d.ts",
+    "category": "canônico",
+    "sha256": "ccd8920413fe27125d42c762f5358f1e779b9cb1f066c944bc8186882c26231f",
+    "destination": "components/data/SegmentBar.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/SegmentBar.jsx",
+    "category": "canônico",
+    "sha256": "cc1658c45e6c917e5ba13103abbda80cd44193fbb0f74bb8afad707d43841c4b",
+    "destination": "components/data/SegmentBar.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/SegmentBar.prompt.md",
+    "category": "canônico",
+    "sha256": "66258049246e445338da5f0c79d328a7c997acac62b0058b732c6bc8bcb505bd",
+    "destination": "components/data/SegmentBar.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/TaskCard.d.ts",
+    "category": "canônico",
+    "sha256": "19d7d9c58769c34537d18b0df3cfc9a077963f52f2f27305272e77c3d579a12b",
+    "destination": "components/data/TaskCard.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/TaskCard.jsx",
+    "category": "canônico",
+    "sha256": "d0f9e5e9c0dd62c4bfb7f7214fa5c42e84bae688f25e700f0cd96ef3b2192827",
+    "destination": "components/data/TaskCard.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/TaskCard.prompt.md",
+    "category": "canônico",
+    "sha256": "7f7f7ae285785e57aab056baa18658ac438debe7c95296a4013e216d1f4c8612",
+    "destination": "components/data/TaskCard.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/data/data.card.html",
+    "category": "canônico",
+    "sha256": "11b3616129ab9b48a575095929eac8f893567a99e4ec62262b573e3fcfe091bb",
+    "destination": "references/components/data/data.card.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "components/feedback/Dialog.d.ts",
+    "category": "canônico",
+    "sha256": "e65f637ecb96897f842c7ba07a300d60403635f5919f4292e98621fed815e542",
+    "destination": "components/feedback/Dialog.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Dialog.jsx",
+    "category": "canônico",
+    "sha256": "3ba9c6fe2a03df11218dff88f5d2b9a1a7523c4b2759e56513e4f69ef1ec7492",
+    "destination": "components/feedback/Dialog.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Dialog.prompt.md",
+    "category": "canônico",
+    "sha256": "acd9e4c4a40886d5336ddd58b661a9fac9f2cfec63c8a0302e2dff8698ede7a3",
+    "destination": "components/feedback/Dialog.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Menu.d.ts",
+    "category": "canônico",
+    "sha256": "d482a65c709c19a7c735900638f92ca1660b4229dceb1db7bd03b744ccc61432",
+    "destination": "components/feedback/Menu.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump.",
+    "adaptation": "Omit do onSelect HTML para aceitar callback customizado."
+  },
+  {
+    "source": "components/feedback/Menu.jsx",
+    "category": "canônico",
+    "sha256": "20de42ccfcf7bd48e97e7b0a005dc75a46cca48b396634578346ecabace2fbef",
+    "destination": "components/feedback/Menu.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Menu.prompt.md",
+    "category": "canônico",
+    "sha256": "06c8216d24c748b7182687a21dab86576cfe0c94709012d4676dac0c2c35016f",
+    "destination": "components/feedback/Menu.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Toast.d.ts",
+    "category": "canônico",
+    "sha256": "124f9bee78d091a145b42bef8a1999ca7dc273fc508368d35f0f90d47bba1345",
+    "destination": "components/feedback/Toast.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Toast.jsx",
+    "category": "canônico",
+    "sha256": "efbb530c29636f37faf1560a44aed2f096428d67685ce9e2b59bfb52fd61c370",
+    "destination": "components/feedback/Toast.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Toast.prompt.md",
+    "category": "canônico",
+    "sha256": "5bb3d91c03628395df8f2c4bc77fb585ece3ede226f2d74b02361c90baa9f377",
+    "destination": "components/feedback/Toast.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Tooltip.d.ts",
+    "category": "canônico",
+    "sha256": "ff5fb624586c78eec88b6cfc54be873cb0601d42354e91760e7918d8a24970f6",
+    "destination": "components/feedback/Tooltip.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Tooltip.jsx",
+    "category": "canônico",
+    "sha256": "a628213928c4f2e2b0835785df4c2524a311a853f24323775ad9b93e5227adde",
+    "destination": "components/feedback/Tooltip.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/Tooltip.prompt.md",
+    "category": "canônico",
+    "sha256": "e6751291b33e90de5d465a286ae91602dfbab86c13283166892868116ea44416",
+    "destination": "components/feedback/Tooltip.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/feedback/feedback.card.html",
+    "category": "canônico",
+    "sha256": "0397a9679ad196cac4d35fab53acee4112039623241955ac748c9fad5e804ef7",
+    "destination": "references/components/feedback/feedback.card.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "components/forms/Checkbox.d.ts",
+    "category": "canônico",
+    "sha256": "ccc0172008109ead702917d972b4e9b602f636f2f6f95c366779650f59ce7f5e",
+    "destination": "components/forms/Checkbox.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Checkbox.jsx",
+    "category": "canônico",
+    "sha256": "cdc3ab507b785ba34f5729eb6fbbe568f21078e92dcb241ca5069c6dab82d2a2",
+    "destination": "components/forms/Checkbox.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Checkbox.prompt.md",
+    "category": "canônico",
+    "sha256": "695cc9e871cd6c69806ca4b52221043e8d0c2ace8df6c2f9a474ea22e738e723",
+    "destination": "components/forms/Checkbox.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Composer.d.ts",
+    "category": "canônico",
+    "sha256": "99b64e7e09c5463bbe5f31583e1b6bd1da41ab69ee45a37d2c7385649f6ccd7e",
+    "destination": "components/forms/Composer.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Composer.jsx",
+    "category": "canônico",
+    "sha256": "46d381c9d862a0ae82aade10cd2d6c4d35b68085437b83b2d5bf584d76ca7462",
+    "destination": "components/forms/Composer.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Composer.prompt.md",
+    "category": "canônico",
+    "sha256": "3dc540aaf909ebac878567fea6ee82a3097fcb07ea7c219d3cb0329910a35f45",
+    "destination": "components/forms/Composer.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Input.d.ts",
+    "category": "canônico",
+    "sha256": "6eb657deff1f0ef99465dbc2a50d4a38ca25ae545dbf480d4bdd94841706d567",
+    "destination": "components/forms/Input.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Input.jsx",
+    "category": "canônico",
+    "sha256": "f724813c51b9b965d1980926a1a5eb3bb036f0cf31112f7bdca7973b4ebefebe",
+    "destination": "components/forms/Input.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Input.prompt.md",
+    "category": "canônico",
+    "sha256": "79bad5eaa40fb894a3fa7981e4539229390329b97b28eb79106482fe927a6bdc",
+    "destination": "components/forms/Input.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Radio.d.ts",
+    "category": "canônico",
+    "sha256": "309ef0cd5875135b9ee64eb6174aa887a4bca860be43931552f11b9ef9a9ba87",
+    "destination": "components/forms/Radio.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Radio.jsx",
+    "category": "canônico",
+    "sha256": "ed16f3fd81068a2a5dc2b591a5e1fabb2881099a7544e5d2ddcfc62e49993908",
+    "destination": "components/forms/Radio.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Radio.prompt.md",
+    "category": "canônico",
+    "sha256": "b7bcce2b839105d06d037dcc64285fc13fa337998e9689e4ea3114df1603d0e1",
+    "destination": "components/forms/Radio.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Select.d.ts",
+    "category": "canônico",
+    "sha256": "c13daeb1625bd5aff0368e536920d0ad03b33273397f89fe0e37755ddd5ffefa",
+    "destination": "components/forms/Select.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Select.jsx",
+    "category": "canônico",
+    "sha256": "a36f924ee4d363863e3054e429758fbd28a5245cee7ed270ad3cdda85e45c631",
+    "destination": "components/forms/Select.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Select.prompt.md",
+    "category": "canônico",
+    "sha256": "517a99e5de443697ad7f26f339f06bb073f279f5d5c3687260169684eb5b1dc0",
+    "destination": "components/forms/Select.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Switch.d.ts",
+    "category": "canônico",
+    "sha256": "8eba5e84115d6bbc7e750caf8f18cae61d8b8fa1fce2c56a22b2df8b2143bfe0",
+    "destination": "components/forms/Switch.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Switch.jsx",
+    "category": "canônico",
+    "sha256": "fa264a9a16269ccfacb573126a07560d8050ffca0a37f530b19964c2fcee528c",
+    "destination": "components/forms/Switch.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Switch.prompt.md",
+    "category": "canônico",
+    "sha256": "7dd7e9f6616aca77f34b01d7008f3dc310de0558bae04d884acb0fd17f2dcd26",
+    "destination": "components/forms/Switch.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Textarea.d.ts",
+    "category": "canônico",
+    "sha256": "42012e5f9db9e912e93745dadefb983250a1fc0a4b8455e63bdc1424ae8c2e1d",
+    "destination": "components/forms/Textarea.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Textarea.jsx",
+    "category": "canônico",
+    "sha256": "c53eead66d748b828c1fccf25a63cd75033173a28aebb75ed9a36aeafc93bb6c",
+    "destination": "components/forms/Textarea.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/Textarea.prompt.md",
+    "category": "canônico",
+    "sha256": "16783c42d40c0d87698dbe2b38bff500f3c6223d7a0aba2490e86c9c4c012939",
+    "destination": "components/forms/Textarea.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/forms/forms.card.html",
+    "category": "canônico",
+    "sha256": "bb8005cd4e7807f47658d3d6fc5f2873e40e3f217f26bd847fd67b07db102749",
+    "destination": "references/components/forms/forms.card.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "components/navigation/FilterTabs.d.ts",
+    "category": "canônico",
+    "sha256": "baf8eda3bffb462a2c6b0faea39031eefb588f72ce0902af7a7ea5b59253e29a",
+    "destination": "components/navigation/FilterTabs.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/FilterTabs.jsx",
+    "category": "canônico",
+    "sha256": "74bf023f38ed4a8d0d39d0458f138e9b273feb9c113929703a9256e07eac97f1",
+    "destination": "components/navigation/FilterTabs.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/FilterTabs.prompt.md",
+    "category": "canônico",
+    "sha256": "2bf448427998926af5e0c3fb1914de41104eeaa5e641e4cb56e06505133a835a",
+    "destination": "components/navigation/FilterTabs.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/NavItem.d.ts",
+    "category": "canônico",
+    "sha256": "a12c7520dcbc4b454762dcc8b8371508c19e3a5e4ab253c94fdadb90fccfdecc",
+    "destination": "components/navigation/NavItem.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/NavItem.jsx",
+    "category": "canônico",
+    "sha256": "390098c133e907a76eb3ced66cacc2910dcf824d4711733d715e7999cad956e5",
+    "destination": "components/navigation/NavItem.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/NavItem.prompt.md",
+    "category": "canônico",
+    "sha256": "114f4fa5d00703596dfc63feb3daf8633b3073a31e41ee8e627842c51f8a9472",
+    "destination": "components/navigation/NavItem.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/Sidebar.d.ts",
+    "category": "canônico",
+    "sha256": "13c2ccca8bd00d6706452c933b2d600a31eda9eec80a5ba7f44028a1eaa8ab8c",
+    "destination": "components/navigation/Sidebar.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump.",
+    "adaptation": "Omit do onSelect HTML para aceitar callback customizado."
+  },
+  {
+    "source": "components/navigation/Sidebar.jsx",
+    "category": "canônico",
+    "sha256": "463acdf21939a92d11da7e631e86a2457803b21ef4e876d8ab9c21717d0a3f3f",
+    "destination": "components/navigation/Sidebar.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/Sidebar.prompt.md",
+    "category": "canônico",
+    "sha256": "591affc401ff31306df02894c05561144ff48e65e6fb22c171b3cfed91cd68ce",
+    "destination": "components/navigation/Sidebar.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/Tabs.d.ts",
+    "category": "canônico",
+    "sha256": "05019901a0c7dbbb453876394098c4dd3049b8e70fca60b1ffe43839f60c6894",
+    "destination": "components/navigation/Tabs.d.ts",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/Tabs.jsx",
+    "category": "canônico",
+    "sha256": "705c22edbe86e9c2df4715b932cb1dd90b325651e7c09f4c9328184204986d68",
+    "destination": "components/navigation/Tabs.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/Tabs.prompt.md",
+    "category": "canônico",
+    "sha256": "79fc50c370164546e3ce8cff2e78423e4a6a629d831230e9104a35feff8d7e54",
+    "destination": "components/navigation/Tabs.prompt.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "components/navigation/navigation.card.html",
+    "category": "canônico",
+    "sha256": "3019b7661ffaf606290b275cfab6f9285a97bcf5348c5e2e232d566cede99580",
+    "destination": "references/components/navigation/navigation.card.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "fonts/Figtree-latin-ext.woff2",
+    "category": "canônico",
+    "sha256": "bf7828e2c258cffcfa50a048ee388a36b95bc16b452e8d36fa797635dbe15965",
+    "destination": "fonts/Figtree-latin-ext.woff2",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "fonts/Figtree-latin.woff2",
+    "category": "canônico",
+    "sha256": "4ba7d3d096695818fe0686be4f1e82c6b05134e18a22260336130335027462dd",
+    "destination": "fonts/Figtree-latin.woff2",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "fonts/GeistMono-latin-ext.woff2",
+    "category": "canônico",
+    "sha256": "1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b",
+    "destination": "fonts/GeistMono-latin-ext.woff2",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "fonts/GeistMono-latin.woff2",
+    "category": "canônico",
+    "sha256": "684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc",
+    "destination": "fonts/GeistMono-latin.woff2",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "guidelines/brand-imagery.html",
+    "category": "canônico",
+    "sha256": "2a75067cf36d80faa1b0d421e3d6eb2dc78538c3e2a85b1b6fbc11ad892b43ca",
+    "destination": "references/guidelines/brand-imagery.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/brand-motifs.html",
+    "category": "canônico",
+    "sha256": "304a73b157358c50e5fc69f70d74df5062e6238d8a6b88cd215a0d93bac741d6",
+    "destination": "references/guidelines/brand-motifs.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/brand-wordmark.html",
+    "category": "canônico",
+    "sha256": "faa82f8617075fd5aff8e2c469a91d781e84a2b6a79297e23b956477240abc4d",
+    "destination": "references/guidelines/brand-wordmark.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-brand.html",
+    "category": "canônico",
+    "sha256": "5905afcec1cf21c65f813a1cd6ee361c2dc80435d56a863c0fe18f8e371e39dd",
+    "destination": "references/guidelines/colors-brand.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-data.html",
+    "category": "canônico",
+    "sha256": "e3c33b749a312a85266b074d909a8caa3121ee4b69bf1af6d03ff1ff4e16f110",
+    "destination": "references/guidelines/colors-data.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-gradients.html",
+    "category": "canônico",
+    "sha256": "e0a9fa236de0cc7b49a24d0aef99f002d8736450bacb72f174dfdae34309630a",
+    "destination": "references/guidelines/colors-gradients.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-neutrals.html",
+    "category": "canônico",
+    "sha256": "e1a9d75411df75c4703e895e814527378395dd436868f0a4dbca498663422fee",
+    "destination": "references/guidelines/colors-neutrals.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-semantic.html",
+    "category": "canônico",
+    "sha256": "cc7c6c061f09b680b0613b304dc1b5f1e7174d2f0e07b2e7541f550e9275f274",
+    "destination": "references/guidelines/colors-semantic.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-status.html",
+    "category": "canônico",
+    "sha256": "800fda01afb9bd04d010305b58d67de4c04f80f575dc2aab56b77ce01d28a43d",
+    "destination": "references/guidelines/colors-status.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/colors-tags.html",
+    "category": "canônico",
+    "sha256": "3d030827d06ba2d2d93641849729a617c0825cd9456f33f39f6bef2e0a949705",
+    "destination": "references/guidelines/colors-tags.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/effects-nesting.html",
+    "category": "canônico",
+    "sha256": "cb0dc9b1b65f7fd67e133e9d689bc52a6b3f6b878c90460bdcee4d2fb85b7d6d",
+    "destination": "references/guidelines/effects-nesting.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/effects-shadows.html",
+    "category": "canônico",
+    "sha256": "fa42ea5457de98b01a9ddd121ca625681d1eddad5000ec0dbfa9430f51fd7abe",
+    "destination": "references/guidelines/effects-shadows.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/effects-states.html",
+    "category": "canônico",
+    "sha256": "6b2563d41d394d7875fe494840e033610de0acadbfc5ebc29d69af0538a87b7c",
+    "destination": "references/guidelines/effects-states.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/iconography.html",
+    "category": "canônico",
+    "sha256": "3cb8a10d5e46ad0cdaa5639736417e180e1e08551ba625fc76feecea8649aeda",
+    "destination": "references/guidelines/iconography.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/spacing-radii.html",
+    "category": "canônico",
+    "sha256": "001a5a6ffe8f0f1923cd65849f33fda6930835351bcbe68c660ff0172a11f6a4",
+    "destination": "references/guidelines/spacing-radii.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/spacing-scale.html",
+    "category": "canônico",
+    "sha256": "b32a3118431e1fcd749a80cb64bad56d05eec374460e543aed4a99f4a300d012",
+    "destination": "references/guidelines/spacing-scale.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/type-display.html",
+    "category": "canônico",
+    "sha256": "8f3fdcd83583146e8398f556a6facafc30c1620e09bdf39813ba01ea40ea29a2",
+    "destination": "references/guidelines/type-display.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/type-mono.html",
+    "category": "canônico",
+    "sha256": "0e883a7ecc53869640675e0562c6880520fc0dae80d6d9f8fa73b5021a7cd821",
+    "destination": "references/guidelines/type-mono.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/type-product.html",
+    "category": "canônico",
+    "sha256": "6093ed0b97e4d66ce30bcd92821b5f3378a8b80d40a5068b107e025a6133edf0",
+    "destination": "references/guidelines/type-product.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "guidelines/type-weights.html",
+    "category": "canônico",
+    "sha256": "9e8144883cd057e41040c18f165f5612918414be380965e1bc2fa683a6771271",
+    "destination": "references/guidelines/type-weights.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "readme.md",
+    "category": "canônico",
+    "sha256": "480a5468fe4c9fb1c79c52a4515dc8918f19d39bf999846f4b7c1eb68c90a17c",
+    "destination": "guidelines/FOUNDATIONS.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump.",
+    "adaptation": "Caminhos e instruções atualizados."
+  },
+  {
+    "source": "scratch/devns.js",
+    "category": "interno da ferramenta",
+    "sha256": "1fa5bb02e27b95f5b32819e9062b28cba7c78b7d88765f324946bd6d83572811",
+    "destination": null,
+    "reason": "Loader de desenvolvimento com XHR síncrono; substituído pelo build local."
+  },
+  {
+    "source": "styles.css",
+    "category": "canônico",
+    "sha256": "67aada707e9175b19d81f407ffff5580c9b59abcec65aaae53cbd9f7f904a9df",
+    "destination": "styles.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "thumbnail.html",
+    "category": "canônico",
+    "sha256": "2d5b68c42c87dafcf7fd9bf11fff4c4ea3dae9217f7a849c3173afd29a5a6977",
+    "destination": "references/thumbnail.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "tokens/base.css",
+    "category": "canônico",
+    "sha256": "1b6579333651e49d320ebfca14aff5547e2faa49abbc317b9e17dd0852335177",
+    "destination": "tokens/base.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "tokens/colors.css",
+    "category": "canônico",
+    "sha256": "ee3d8a1295202a56c3309b6b7cf70c842bd42b7fb2b09406a92b7c6d4949d284",
+    "destination": "tokens/colors.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "tokens/effects.css",
+    "category": "canônico",
+    "sha256": "2b2ad4861acd54f41e90545ffe4c30e0946e88fd030211d4a8ab65ef21123b3c",
+    "destination": "tokens/effects.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "tokens/fonts.css",
+    "category": "canônico",
+    "sha256": "ccc6be04fa553f874f48af51480f40b09b8ea3c75593b8f10bd4aa901726366b",
+    "destination": "tokens/fonts.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "tokens/spacing.css",
+    "category": "canônico",
+    "sha256": "4dade327e7ca5c6e758d32bfa2eb483b7efbe46b1e9bccef63f2d402bb9d1320",
+    "destination": "tokens/spacing.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "tokens/typography.css",
+    "category": "canônico",
+    "sha256": "03b85fc8e3294fdafe21aea22bbaa3b184c3d59f7b5383e322213136c9cddd10",
+    "destination": "tokens/typography.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/AgentScreen.jsx",
+    "category": "canônico",
+    "sha256": "e480d393f018e2bbd298dfc65566233f17a72669c26846b1b8286024af140ab9",
+    "destination": "templates/dashboard/AgentScreen.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/App.jsx",
+    "category": "canônico",
+    "sha256": "e3eda43f1e60bb80a53b26548223e5bbd7d200320c990ecc7f8f512d02e0af3e",
+    "destination": "templates/dashboard/App.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/ArtifactsScreen.jsx",
+    "category": "canônico",
+    "sha256": "a82a4062debd91ad360ec11f7269de874e2b9f22799d7b96166c7f75fe2fb04c",
+    "destination": "templates/dashboard/ArtifactsScreen.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/HomeScreen.jsx",
+    "category": "canônico",
+    "sha256": "ab7629e0dd98d5c080b975ca535fcc123c463926b343314457597c41ba8c1909",
+    "destination": "templates/dashboard/HomeScreen.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/README.md",
+    "category": "canônico",
+    "sha256": "ac3dc36a6974f214567d7f9016db9fdb073b68b5254ca54c13ccf060ef87b9e1",
+    "destination": "templates/dashboard/README.md",
+    "reason": "Fonte única editável; sem versão concorrente no dump.",
+    "adaptation": "Caminhos e instruções atualizados."
+  },
+  {
+    "source": "ui_kits/dashboard/Shell.jsx",
+    "category": "canônico",
+    "sha256": "0b1ffba2bc241d07eaad997ba3853f963c7eeca01110883ce69423dbe4a6a380",
+    "destination": "templates/dashboard/Shell.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/TasksScreen.jsx",
+    "category": "canônico",
+    "sha256": "6174878667767a377223e170ef1c55a60ea15022d6d91dfcc66a067bc6cfc7b0",
+    "destination": "templates/dashboard/TasksScreen.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/_preview.html",
+    "category": "canônico",
+    "sha256": "0cf412137734efea9341a1b393a0c3d067bea47b0f773aefc222e7352eabaf1d",
+    "destination": "references/ui_kits/dashboard/_preview.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "ui_kits/dashboard/agent.html",
+    "category": "canônico",
+    "sha256": "0d7161eac07ce29cf768c4dfefaf112266e4e5c2e718d3482e556e513ae75096",
+    "destination": "references/ui_kits/dashboard/agent.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "ui_kits/dashboard/artifacts.html",
+    "category": "canônico",
+    "sha256": "1ba693e168348548de472269ada23a0c7dc50fdf7920f9b9d9205a93e3106f75",
+    "destination": "references/ui_kits/dashboard/artifacts.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "ui_kits/dashboard/data.js",
+    "category": "canônico",
+    "sha256": "027751cab025be360db169e65fcf6d34a3b2675bd05c317f6e8437dee2cc59ed",
+    "destination": "templates/dashboard/data.js",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/home.html",
+    "category": "canônico",
+    "sha256": "06d10f536f52e9f0093aadd3953e38e44824da320f3779d4a1ef76d048c833d6",
+    "destination": "references/ui_kits/dashboard/home.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "ui_kits/dashboard/index.html",
+    "category": "canônico",
+    "sha256": "25f7bd1983da89a2637e2f5d2050ddd3631cac7064727381b3508b0c24dc1f46",
+    "destination": "references/ui_kits/dashboard/index.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "ui_kits/dashboard/ios-frame.jsx",
+    "category": "canônico",
+    "sha256": "24642b887be3d26ab5d1ff445ad98c363cffd33746c539a117da570ac7b6eb54",
+    "destination": "templates/dashboard/ios-frame.jsx",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/kit.css",
+    "category": "canônico",
+    "sha256": "098b5325ba6cca5def4000489aefdf75ef33fdfd558ae319a9ea6d000a2c215d",
+    "destination": "templates/dashboard/kit.css",
+    "reason": "Fonte única editável; sem versão concorrente no dump."
+  },
+  {
+    "source": "ui_kits/dashboard/mobile.html",
+    "category": "canônico",
+    "sha256": "f2ac235a7d5f01b172a8d825470abbeb1e5c3eaef8c674322d2f36acdc5ccecc",
+    "destination": "references/ui_kits/dashboard/mobile.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "ui_kits/dashboard/tasks.html",
+    "category": "canônico",
+    "sha256": "ab4c3d426d9047f6eb012aba36596bb02c2c3437984ad8a93cbf5e7a02c9d3d3",
+    "destination": "references/ui_kits/dashboard/tasks.html",
+    "reason": "Referência visual preservada; caminhos e runtime adaptados para abertura offline.",
+    "adaptation": "Caminhos e scripts locais; JSX inline preservado como fonte inerte."
+  },
+  {
+    "source": "uploads/01-ef5df1256189919.6ab51e1c2acaf.jpg",
+    "category": "canônico",
+    "sha256": "56713b2b556e66d6135bfe89e6399120aad351bb42862bab9a91aa45ca3061aa",
+    "destination": "references/boards/01-ef5df1256189919.6ab51e1c2acaf.jpg",
+    "reason": "Painel visual original único citado pelo guia; preservado como referência, não asset de produto."
+  },
+  {
+    "source": "uploads/02-c500e4256189919.6ab51e1c2b3c9.jpg",
+    "category": "canônico",
+    "sha256": "a3f5cea383838c3369e9f0510306146b4511ad65e1308291c211eab866a91eb2",
+    "destination": "references/boards/02-c500e4256189919.6ab51e1c2b3c9.jpg",
+    "reason": "Painel visual original único citado pelo guia; preservado como referência, não asset de produto."
+  },
+  {
+    "source": "uploads/03-cbf4e4256189919.6ab51e1c2bace.jpg",
+    "category": "canônico",
+    "sha256": "4a64f2afbd461d876b766252773fcbdec94bfff6bb0bbab618358755652578cd",
+    "destination": "references/boards/03-cbf4e4256189919.6ab51e1c2bace.jpg",
+    "reason": "Painel visual original único citado pelo guia; preservado como referência, não asset de produto."
+  }
+]

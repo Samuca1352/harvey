@@ -1,0 +1,48 @@
+<!-- @dsCard group="Components" viewport="700x560" name="Core" subtitle="Buttons, icon buttons, chips, badges, status, avatar, card, eyebrow" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../../styles.css">
+
+
+
+
+<style>body{padding:20px 24px;background:#fff}.sec{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}.lbl{font:var(--type-label);color:var(--text-tertiary)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}</style>
+<script src="../../runtime/react.js"></script>
+<script src="../../runtime/react-dom.js"></script>
+<script src="../../runtime/components.js"></script>
+</head><body><div id="root"></div>
+<script type="text/plain" data-reference-jsx>
+const NS = window.ProspectBoostDesignSystem_668922;
+
+const { Button, IconButton, IconChip, Badge, Count, StatusDot, Kbd, Avatar, Card, Inset, Eyebrow, Icon } = NS;
+function Demo() {
+  return (<div>
+    <div className="sec"><span className="lbl">Button · primary / secondary / soft / ghost / danger · sm md lg · disabled</span>
+      <div className="row">
+        <Button iconLeft="plus">New agent</Button><Button variant="secondary">Book a demo</Button><Button variant="soft">Open</Button><Button variant="ghost" iconLeft="download">Export</Button><Button variant="danger">Delete</Button>
+      </div>
+      <div className="row"><Button size="sm">Save</Button><Button size="lg">Get Started</Button><Button variant="secondary" size="lg">Book a demo</Button><Button disabled>Disabled</Button><Button variant="soft" iconLeft="plus" style={{width:200}}>Add Task</Button></div>
+    </div>
+    <div className="sec"><span className="lbl">IconButton · ghost / outline / soft / primary · IconChip · Kbd · Avatar</span>
+      <div className="row">
+        <IconButton icon="ellipsis-vertical" size="sm" label="More" /><IconButton icon="bell" variant="outline" label="Notifications" /><IconButton icon="menu" variant="soft" label="Menu" /><IconButton icon="send" variant="primary" label="Send" /><IconButton icon="panel-left-close" size="sm" label="Collapse" />
+        <span style={{width:12}} />
+        <IconChip icon="sparkles" /><IconChip icon="user-search" /><IconChip icon="phone-outgoing" /><IconChip letter="P" color="var(--pb-purple-500)" /><IconChip letter="A" color="var(--pb-pink-500)" />
+        <span style={{width:12}} /><Kbd keys={['F','⌘']} /><Avatar name="Ana Souza" /><Avatar name="Leo Prado" round size={28} />
+      </div>
+    </div>
+    <div className="sec"><span className="lbl">Badge tones · Count · StatusDot</span>
+      <div className="row">
+        <Badge tone="purple">Prospect Finder</Badge><Badge tone="pink">Account Researcher</Badge><Badge tone="blue">Outbound Writer</Badge><Badge tone="green">Trigger: schedule.daily</Badge><Badge tone="orange">Live</Badge><Badge tone="red" dot>Bounced</Badge><Badge tone="outline">Draft</Badge><Count>1,829</Count>
+      </div>
+      <div className="row" style={{gap:14}}>{['queued','running','success','failed'].map(s => <span key={s} style={{display:'inline-flex',alignItems:'center',gap:6,font:'var(--type-body)'}}><StatusDot status={s} size={14} />{s[0].toUpperCase()+s.slice(1)}</span>)}</div>
+    </div>
+    <div className="sec"><span className="lbl">Card (outline / tile) + Inset · Eyebrow</span>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,alignItems:'start'}}>
+        <Card title="Recent activity" action="View all"><Inset style={{padding:12,font:'var(--type-body)'}}>Inset content</Inset></Card>
+        <Card variant="tile" title="Upcoming triggers"><Inset style={{padding:12,background:'#fff',font:'var(--type-body)'}}>Row content</Inset></Card>
+        <div style={{display:'grid',placeItems:'center',height:110}}><Eyebrow>Stop chasing leads.</Eyebrow></div>
+      </div>
+    </div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script><script src="../../runtime/references_components_core_core.card.js"></script></body></html>

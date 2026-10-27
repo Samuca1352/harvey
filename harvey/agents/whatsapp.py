@@ -38,7 +38,7 @@ from harvey.integrations.whatsapp import (
     normalize_phone,
 )
 from harvey.models.prospect import Prospect
-from harvey.state import StateManager
+from harvey.state import REAL_REPLY_EXISTS_SQL, StateManager
 
 logger = logging.getLogger("harvey.whatsapp")
 
@@ -69,6 +69,22 @@ QUESTION_ANGLES = (
     "como ela mostra os produtos novos para os clientes hoje",
     "como é para ela atender o cliente na loja e no WhatsApp ao mesmo tempo",
 )
+# Opener C: a reason to be writing, then a question answered in seconds.
+C_MOTIVES = (
+    "você está ajudando algumas lojas da região a vender mais pelo WhatsApp",
+    "você trabalha com lojas que vendem pelo WhatsApp e está conversando com algumas da cidade",
+    "você está montando algo para lojas pequenas que atendem muito por mensagem e quer entender a rotina delas",
+    "você conversa com lojistas da região sobre como eles vendem pelo WhatsApp",
+)
+C_ANGLES = (
+    "qual produto ou modelo é o mais pedido por mensagem",
+    "se ela manda foto dos produtos um por um para quem pergunta",
+    "se o pessoal pergunta mais preço, tamanho/modelo ou se tem em estoque",
+    "se quem chama no WhatsApp já sabe o que quer ou pede para ver opções",
+    "se as novidades que chegam vão primeiro para o Instagram ou para o WhatsApp",
+    "quem responde o WhatsApp da loja: o dono ou alguém da equipe",
+)
+VARIANT_PROMPTS = {"A": "whatsapp", "B": "whatsapp_b", "C": "whatsapp_c"}
 # How a first message opens, one picked at random per draft, plus a random
 # length: near-identical messages from one number are what WhatsApp's spam
 # filter catches, so no two openers may share a skeleton. No "bom dia": the
@@ -270,13 +286,27 @@ class WhatsAppAgent:
         return drafted
 
     def _variant(self, prospect: Prospect) -> str:
-        """A or B, stable per prospect and evenly split (ids are hex)."""
+        """One of the active openers, stable per prospect and evenly split (ids are hex)."""
+        variants = self.cfg.opener_variants
         if not self.cfg.opener_test:
-            return "A"
+            return variants[0]
         try:
-            return "AB"[int(prospect.id, 16) % 2]
+            return variants[int(prospect.id, 16) % len(variants)]
         except ValueError:
-            return "A"
+            return variants[0]
+
+    async def _review_facts(self, company_id: str) -> list[str]:
+        """The store's Google rating and review count, when known."""
+        values = {}
+        for code in ("REVIEW_RATING", "REVIEW_COUNT"):
+            rows = await self.state.get_observations(company_id=company_id, signal_code=code, limit=1)
+            if rows and rows[0].get("value_num") is not None:
+                values[code] = rows[0]["value_num"]
+        if "REVIEW_RATING" not in values:
+            return []
+        rating = f"{values['REVIEW_RATING']:.1f}".replace(".", ",")
+        count = int(values.get("REVIEW_COUNT") or 0)
+        return [f"- Nota no Google: {rating} ({count} avaliações)"]
 
     def _opt_out_line(self) -> str:
         lines = [x for x in self.cfg.opt_out_lines if x.strip()]
@@ -306,11 +336,13 @@ class WhatsAppAgent:
                 facts.append(f"- Ferramentas detectadas no site: {', '.join(company.tech_stack[:6])}")
             for signal in company.signals[:3]:
                 facts.append(f"- Sinal ({signal.get('type', 'sinal')}): {signal.get('detail', '')}")
+            if variant == "C":
+                facts += await self._review_facts(company.id)
         if prospect.personalization_notes:
             facts.append(f"- Notas: {prospect.personalization_notes}")
 
         prompt = self.brain.load_prompt(
-            "whatsapp_b" if variant == "B" else "whatsapp",
+            VARIANT_PROMPTS.get(variant, "whatsapp"),
             product_name=self.config.product.name,
             product_description=self.config.product.description,
             product_benefits="\n".join(f"- {b}" for b in self.config.product.key_benefits),
@@ -319,7 +351,8 @@ class WhatsAppAgent:
             persona_company=self.config.persona.company,
             persona_role=self.config.persona.role,
             persona_tone=self.config.persona.tone,
-            angle=random.choice(QUESTION_ANGLES),
+            angle=random.choice(C_ANGLES if variant == "C" else QUESTION_ANGLES),
+            motive=random.choice(C_MOTIVES),
             opening=self._opening(),
             length="Entre {} e {} palavras.".format(*random.choice(OPENER_LENGTHS)),
         )
@@ -508,15 +541,19 @@ class WhatsAppAgent:
             return
 
         now = _now().isoformat()
-        # Replies get their own query: a backlog of cold messages must never
-        # push them out of the LIMIT.
+        # Replies and follow-ups each get their own query: a backlog of cold
+        # messages must never push an existing conversation out of the LIMIT.
         due = await self.state.get_outbox(
             status="approved", due_before=now, limit=60, channel="whatsapp", kind="reply"
         )
         if not replies_only:
             due += await self.state.get_outbox(
                 status="approved", due_before=now, limit=60, channel="whatsapp",
-                exclude_kind="reply",
+                kind="followup",
+            )
+            due += await self.state.get_outbox(
+                status="approved", due_before=now, limit=60, channel="whatsapp",
+                kind="sequence",
             )
         else:
             # A contact the shop just shared is waiting on us, and a cold
@@ -542,9 +579,10 @@ class WhatsAppAgent:
         cold_left = await self.cold_left_today()
         cold_open = cold_left > 0 and await self.cold_due()
         sent = 0
-        # Replies first, then contacts a shop just shared: someone is waiting.
+        # Existing conversations first, then contacts a shop just shared.
         due.sort(key=lambda i: (
-            i["kind"] != "reply", i.get("subject") != HANDOFF_SUBJECT, i.get("send_at") or ""
+            i["kind"] != "reply", i["kind"] != "followup",
+            i.get("subject") != HANDOFF_SUBJECT, i.get("send_at") or ""
         ))
         for item in due:
             if sent >= MAX_SENDS_PER_CYCLE:
@@ -559,9 +597,13 @@ class WhatsAppAgent:
             if prospect is None:
                 await self.state.update_outbox_item(item["id"], status="failed", error="prospect missing")
                 continue
-            if item["kind"] == "followup" and not await self._still_waiting(item):
+            if item["kind"] == "followup" and (
+                prospect.status in STOP_STATUSES - {"replied"}
+                or not await self._still_waiting(item)
+            ):
                 await self.state.update_outbox_item(
-                    item["id"], status="cancelled", error="customer wrote back or conversation closed"
+                    item["id"], status="cancelled",
+                    error="customer wrote back, conversation closed, or prospect suppressed",
                 )
                 continue
             if cold and prospect.status in STOP_STATUSES:
@@ -569,6 +611,7 @@ class WhatsAppAgent:
                     item["id"], status="cancelled", error=f"prospect status '{prospect.status}'"
                 )
                 continue
+
 
             phone = item["to_email"]
             gate = pre_send_check_whatsapp(phone, item["body"], prospect=prospect, kind=item["kind"])
@@ -682,23 +725,105 @@ class WhatsAppAgent:
             logger.debug(f"WhatsApp: conversation append failed: {e}")
 
 
+_VARIANT_SENT_SQL = f"""
+    FROM settings s
+    JOIN outbox o ON o.prospect_id = substr(s.key, 12)
+                 AND o.channel = 'whatsapp' AND o.kind = 'sequence' AND o.status = 'sent'
+    JOIN prospects p ON p.id = o.prospect_id
+    LEFT JOIN (
+        SELECT prospect_id,
+               MAX(COALESCE(intent, '') != 'ooo') AS human_replied,
+               MAX(intent = 'ooo') AS automatic_replied,
+               MAX(intent IN ('interested', 'question', 'objection')) AS engaged,
+               MAX(intent = 'interested') AS interested
+        FROM conversations
+        WHERE channel = 'whatsapp' AND {REAL_REPLY_EXISTS_SQL}
+        GROUP BY prospect_id
+    ) c ON c.prospect_id = o.prospect_id
+    LEFT JOIN (
+        SELECT json_extract(details_json, '$.prospect_phone') AS phone,
+               MAX(created_at) AS last_auto_at
+        FROM actions
+        WHERE action_type = 'whatsapp_auto_message' AND json_valid(details_json)
+        GROUP BY phone
+    ) a ON a.phone = p.phone
+    WHERE s.key LIKE 'wa_variant:%'
+      AND NOT EXISTS (
+          SELECT 1 FROM settings test
+          WHERE test.key = 'wa_test_contact:' || p.id AND test.value = '1'
+      )"""
+
+_VARIANT_HUMAN_SQL = "COALESCE(c.human_replied, 0) = 1"
+_VARIANT_AUTO_SQL = """(COALESCE(c.automatic_replied, 0) = 1
+                       OR COALESCE(julianday(a.last_auto_at) >= julianday(o.sent_at), 0))"""
+
+
 async def variant_stats(state) -> list[dict]:
-    """Reply rate per opener variant: sent, replied, rate."""
+    """Count contacts, with human responses separate from automatic ones.
+
+    ``replied``/``rate`` refer to human replies, not qualified interest.
+    ``engaged`` requires an interested/question/objection classification;
+    ``interested`` requires interested specifically. These describe recorded
+    conversation intent, not a confirmed trial or sale. Explicit test contacts
+    (setting ``wa_test_contact:<id> = 1``) are excluded from every denominator.
+    """
+    human = _VARIANT_HUMAN_SQL
+    auto = _VARIANT_AUTO_SQL
     async with state._connect() as db:
         async with db.execute(
-            """SELECT s.value AS variant,
-                      COUNT(DISTINCT o.prospect_id) AS sent,
-                      COUNT(DISTINCT c.prospect_id) AS replied
-               FROM settings s
-               JOIN outbox o ON o.prospect_id = substr(s.key, 12)
-                            AND o.channel = 'whatsapp' AND o.kind = 'sequence'
-                            AND o.status = 'sent'
-               LEFT JOIN conversations c ON c.prospect_id = o.prospect_id
-               WHERE s.key LIKE 'wa_variant:%'
-               GROUP BY s.value ORDER BY s.value"""
+            f"""SELECT s.value,
+                      COUNT(DISTINCT o.prospect_id),
+                      COUNT(DISTINCT CASE WHEN {human} THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN {human}
+                            AND p.status IN ('lost', 'opted_out') THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN p.status IN ('meeting', 'closed') THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN datetime(o.sent_at) >= datetime('now', '-7 days') THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN datetime(o.sent_at) >= datetime('now', '-7 days')
+                            AND {human} THEN p.id END),
+                      MIN(o.sent_at), MAX(o.sent_at),
+                      COUNT(DISTINCT CASE WHEN {auto} THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN {auto} AND NOT ({human}) THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN {human} AND c.engaged = 1
+                            AND p.status NOT IN ('lost', 'opted_out') THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN {human} AND c.interested = 1
+                            AND p.status NOT IN ('lost', 'opted_out') THEN p.id END),
+                      COUNT(DISTINCT CASE WHEN datetime(o.sent_at) >= datetime('now', '-7 days')
+                            AND {auto} AND NOT ({human}) THEN p.id END)"""
+            + _VARIANT_SENT_SQL + " GROUP BY s.value ORDER BY s.value"
         ) as cur:
             rows = await cur.fetchall()
-    return [
-        {"variant": v, "sent": n, "replied": r, "rate": (r / n if n else 0.0)}
-        for v, n, r in rows
-    ]
+    out = []
+    for v, n, r, neg, meet, n7, r7, first, last, auto, auto_only, engaged, interested, auto7 in rows:
+        out.append({
+            "variant": v, "sent": n, "replied": r, "rate": (r / n if n else 0.0),
+            "human_replied": r, "automatic_replied": auto, "automatic_only": auto_only,
+            "any_reply": r + auto_only, "interested": interested,
+            "refused": neg, "engaged": engaged, "meetings": meet,
+            "engaged_rate": (engaged / n if n else 0.0),
+            "sent_7d": n7, "replied_7d": r7, "rate_7d": (r7 / n7 if n7 else 0.0),
+            "automatic_only_7d": auto7, "any_reply_7d": r7 + auto7,
+            "first_sent": first, "last_sent": last,
+        })
+    return out
+
+
+async def variant_examples(state, per_variant: int = 8) -> dict[str, list[dict]]:
+    """Latest real-contact openers, distinguishing human and automatic replies."""
+    async with state._connect() as db:
+        async with db.execute(
+            f"""SELECT s.value, p.company, o.body, o.sent_at, p.status,
+                       {_VARIANT_HUMAN_SQL}, {_VARIANT_AUTO_SQL}"""
+            + _VARIANT_SENT_SQL + " GROUP BY o.id ORDER BY o.sent_at DESC"
+        ) as cur:
+            rows = await cur.fetchall()
+    out: dict[str, list[dict]] = {}
+    for v, company, body, sent_at, status, replied, automatic in rows:
+        bucket = out.setdefault(v, [])
+        if len(bucket) < per_variant:
+            bucket.append({
+                "company": company, "body": body, "sent_at": sent_at,
+                "status": status, "replied": bool(replied),
+                "human_replied": bool(replied), "automatic_replied": bool(automatic),
+                "automatic_only": bool(automatic and not replied),
+            })
+    return out

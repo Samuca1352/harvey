@@ -349,6 +349,38 @@ def parse_contact_cards(body: str) -> list[tuple[str, str]]:
     return cards
 
 
+# A mobile typed in a message: optional +55, optional area code, then 9XXXX-XXXX.
+_TYPED_MOBILE = re.compile(
+    r"(?<!\d)(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?9[\s.-]?\d{4}[\s.-]?\d{4}(?!\d)"
+)
+_GREETING_WORDS = {"bom", "boa", "dia", "tarde", "noite", "oi", "ola", "obrigado", "obrigada", "ok"}
+
+
+def typed_contacts(body: str, own_phone: str) -> list[tuple[str, str]]:
+    """Mobiles typed in a message ("996261809\nPaula") -> [(name, digits)].
+
+    A number without an area code borrows the sender's: a shop passing a
+    colleague's number nearly always means one in its own city. The name is
+    a short line (or the rest of the number's line) right after or before it.
+    """
+    lines = (body or "").splitlines()
+    found = []
+    for i, line in enumerate(lines):
+        for m in _TYPED_MOBILE.finditer(line):
+            digits = re.sub(r"\D", "", m.group())
+            if len(digits) == 9 and own_phone.startswith(_BR) and len(own_phone) == 13:
+                digits = own_phone[2:4] + digits
+            name = ""
+            rest = (line[:m.start()] + " " + line[m.end():]).strip()
+            for near in (rest, *lines[i + 1:i + 2], *lines[max(i - 1, 0):i]):
+                words = re.findall(r"[^\W\d_]+", near)
+                if 0 < len(words) <= 2 and not {_fold(w) for w in words} & _GREETING_WORDS:
+                    name = near
+                    break
+            found.append((name, digits))
+    return found
+
+
 def contact_first_name(display: str, store: str) -> str:
     """The first word of a saved contact name that is a name: not part of the
     store's name, not a pet name or a role. "" when there is none."""

@@ -30,6 +30,7 @@ from harvey.integrations.whatsapp import (
     is_mobile,
     normalize_phone,
     parse_contact_cards,
+    typed_contacts,
 )
 from harvey.models import Company
 from harvey.models.prospect import Prospect
@@ -761,6 +762,33 @@ async def test_a_card_without_a_number_asks_for_it(state):
     assert "peça o número" in convo.thread[0].content
 
 
+def test_typed_numbers_are_contacts():
+    shop = "5511912345678"
+    assert typed_contacts("Bom dia\nPertence a esse numero a loja\n996261809\nPaula", shop) == [
+        ("Paula", "11996261809")]
+    assert typed_contacts("fala com o Beto (17) 98888-7777", shop) == [("", "17988887777")]
+    assert typed_contacts("Beto 17 98888-7777", shop) == [("Beto", "17988887777")]
+    assert typed_contacts("custa 1.299, CEP 15015-100", shop) == []
+
+
+@pytest.mark.asyncio
+async def test_a_typed_number_gets_a_warm_first_message(state):
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state, intent="referral")
+    handler.wa.inbound["5511912345678"] = [WaInbound(
+        id="T1", phone="5511912345678",
+        body="Bom dia\nPertence a esse numero a loja\n996261809\nPaula",
+        timestamp="2026-10-20T12:00:00Z")]
+    await handler.run()
+
+    paula = await state.get_prospect_by_phone("5511996261809")
+    assert paula and paula.first_name == "Paula" and paula.company == prospect.company
+    first = [i for i in await state.get_outbox(channel="whatsapp") if i["prospect_id"] == paula.id]
+    assert len(first) == 1 and first[0]["subject"] == HANDOFF_SUBJECT
+    convo = (await state.get_conversations_by_status("open"))[0]
+    assert "Você vai chamar Paula agora" in convo.thread[0].content
+
+
 @pytest.mark.asyncio
 async def test_shared_contact_message_goes_out_first_even_from_the_fast_watcher(state):
     agent = await staged_agent(state)                       # one approved COLD message
@@ -1261,6 +1289,45 @@ async def test_openers_are_split_between_two_variants_and_counted(state):
 
 
 @pytest.mark.asyncio
+async def test_opener_c_gets_its_prompt_and_google_rating_and_examples_are_listed(state, monkeypatch):
+    from harvey.agents.whatsapp import variant_examples, variant_stats
+    agent = make_agent(state, require_approval=False)
+    agent.config.channels.whatsapp.opener_variants = ["A", "C"]
+    from harvey.brain import Brain
+    calls, sent_prompts = [], []
+    agent.brain.load_prompt = lambda name, **kw: (calls.append(name), Brain.load_prompt(None, name, **kw))[1]
+    real_think = agent.brain.think_json
+
+    async def spy(prompt, **k):
+        sent_prompts.append(prompt)
+        return await real_think(prompt, **k)
+    agent.brain.think_json = spy
+    from harvey.signals import seed_signal_catalog
+    await seed_signal_catalog(state)
+    for i in range(10):
+        cid = await seed_company(state, f"Loja {i}", f"(11) 9{i}234-5678", ext=f"gmaps:{i}")
+        await state.add_observations([
+            {"company_id": cid, "signal_code": "REVIEW_RATING", "value_num": 4.8, "collector": "t"},
+            {"company_id": cid, "signal_code": "REVIEW_COUNT", "value_num": 52, "collector": "t"},
+        ])
+    await agent.prepare()
+    # Exercise both prompts in the first write batch regardless of random IDs.
+    prospects = await state.get_prospects_by_status("new")
+    variants = {p.id: ("A", "C")[i % 2] for i, p in enumerate(prospects)}
+    monkeypatch.setattr(agent, "_variant", lambda prospect: variants[prospect.id])
+    await agent.write()
+    assert set(calls) == {"whatsapp", "whatsapp_c"}
+    c_prompts = [p for p in sent_prompts if "Nota no Google: 4,8 (52 avaliações)" in p]
+    assert c_prompts and all("{{" not in p for p in c_prompts)
+
+    await agent.send()
+    stats = {r["variant"]: r for r in await variant_stats(state)}
+    assert set(stats) <= {"A", "C"} and sum(r["sent"] for r in stats.values()) == len(agent.client.sent)
+    examples = await variant_examples(state)
+    assert sum(len(v) for v in examples.values()) == len(agent.client.sent)
+
+
+@pytest.mark.asyncio
 async def test_daily_cap_ramps_up_from_the_first_cold_send(state):
     agent = make_agent(state, max_daily_sends=50, ramp_start_sends=40, ramp_step_sends=5)
     assert await agent.daily_cap() == 40                      # nothing sent yet: day 0
@@ -1490,6 +1557,8 @@ async def test_followup_is_dropped_if_the_customer_wrote_back(state):
     assert (await followups(state))[0]["status"] == "cancelled"
 
 
+
+
 @pytest.mark.asyncio
 async def test_harvey_stays_out_of_conversations_a_human_has(state):
     from harvey.models.conversation import Conversation, Message
@@ -1557,3 +1626,30 @@ async def test_empty_whatsapp_notice_is_not_a_reply(state):
     await handler.run()
     convo = (await state.get_conversations_by_status("open"))[0]
     assert [m.content for m in convo.thread][0] == "Oi, como funciona?"
+
+
+@pytest.mark.asyncio
+async def test_watcher_over_budget_still_sends_written_replies_but_reads_nothing():
+    from harvey.main import whatsapp_watcher
+    config = load_config()
+    stop = asyncio.Event()
+    calls = []
+
+    class Brain:
+        paused_reason = ""
+        async def is_within_budget(self, *_a, **_k):
+            return False
+
+    class Handler:
+        async def _run_whatsapp(self, **_k):
+            calls.append("read")
+
+    class Agent:
+        async def ensure_online(self):
+            calls.append("online")
+        async def send(self, replies_only=False):
+            calls.append(("send", replies_only))
+            stop.set()
+
+    await asyncio.wait_for(whatsapp_watcher(Handler(), Agent(), Brain(), config, stop), 5)
+    assert calls == [("send", True)]

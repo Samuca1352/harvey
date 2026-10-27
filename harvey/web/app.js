@@ -10,27 +10,38 @@ let _desk = { items: [], i: 0 };
 // dashboard matches the rest of your machine until you deliberately override
 // it. Stored per-browser; nothing is sent anywhere.
 
-const THEMES = ['auto', 'light', 'dark'];
+const THEMES = ['light', 'dark'];
 
 function applyTheme(mode) {
-  const root = document.documentElement;
-  if (mode === 'auto') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', mode);
-  const btn = document.getElementById('theme-btn');
-  if (btn) btn.textContent = mode;
+  const m = mode === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', m);
+
+  const lightBtn = document.getElementById('theme-light-btn');
+  const darkBtn = document.getElementById('theme-dark-btn');
+  if (lightBtn && darkBtn) {
+    lightBtn.classList.toggle('active', m === 'light');
+    darkBtn.classList.toggle('active', m === 'dark');
+  }
+  const legacyBtn = document.getElementById('theme-btn');
+  if (legacyBtn) legacyBtn.textContent = m;
+}
+
+function setTheme(mode) {
+  const m = mode === 'dark' ? 'dark' : 'light';
+  try { localStorage.setItem('harvey-theme', m); } catch { /* private mode */ }
+  applyTheme(m);
 }
 
 function cycleTheme() {
-  const now = localStorage.getItem('harvey-theme') || 'auto';
-  const next = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length];
-  try { localStorage.setItem('harvey-theme', next); } catch { /* private mode */ }
-  applyTheme(next);
+  const now = localStorage.getItem('harvey-theme') || 'light';
+  const next = now === 'light' ? 'dark' : 'light';
+  setTheme(next);
 }
 
 (function initTheme() {
-  let saved = 'auto';
-  try { saved = localStorage.getItem('harvey-theme') || 'auto'; } catch { /* ignore */ }
-  applyTheme(THEMES.includes(saved) ? saved : 'auto');
+  let saved = 'light';
+  try { saved = localStorage.getItem('harvey-theme') || 'light'; } catch { /* ignore */ }
+  applyTheme(saved === 'dark' ? 'dark' : 'light');
 })();
 
 // ── Utilities ──
@@ -151,18 +162,23 @@ function toggleVisibility(inputId) {
 // ── Tabs ──
 
 function showTab(id, btn) {
+  toggleNavigation(false);
   currentTab = id;
   if (id === 'companies') companyDrill = false;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if (btn) btn.classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => {
+    if (b.classList.contains('active')) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
   loadCurrentTab();
 }
 
 function loadCurrentTab() {
   switch (currentTab) {
-    case 'today': loadToday(); loadSetupStatus(); loadRuns(); loadTodayActivity(); break;
+    case 'today': loadToday(); loadSetupStatus(); loadRuns(); loadTodayActivity(); loadOutreach(); break;
     case 'signals': loadSignals(); break;
     case 'discover': loadDiscoverProviders(); break;
     case 'companies': if (!companyDrill) loadCompanies(); break;
@@ -171,10 +187,92 @@ function loadCurrentTab() {
     case 'outbox': loadOutbox(); break;
     case 'conversations': loadConversations(); break;
     case 'activity': loadActivity(); break;
+    case 'openers': loadOpeners(); break;
     case 'usage': loadUsage(); break;
     case 'settings': loadSettings(); break;
     case 'controls': loadHarveyStatus(); loadLogs(); break;
   }
+}
+
+// ── ProspectBoost Design System Data Viz Helpers ──
+
+function renderMiniChart(levels, highlight, tone, color) {
+  levels = levels || [0.45, 1, 0.5];
+  highlight = highlight !== undefined ? highlight : 1;
+  tone = tone || 'blue';
+  const TONES = {
+    green: 'var(--status-success)',
+    red: 'var(--status-danger)',
+    orange: 'var(--status-warning)',
+    blue: 'var(--status-info)',
+    azure: 'var(--status-queued)',
+    pink: 'var(--chart-2)',
+    purple: 'var(--chart-4)',
+    neutral: 'var(--text-tertiary)'
+  };
+  const c = color || TONES[tone] || 'var(--chart-1)';
+  return '<div class="pb-minichart" aria-hidden="true">' +
+    levels.map((lv, i) =>
+      '<div class="pb-minichart__slot">' +
+        (i === highlight
+          ? '<div class="pb-minichart__bar" style="height:' + Math.round(lv * 100) + '%;background:' + c + '"></div>'
+          : '<div class="pb-minichart__line" style="bottom:' + Math.round(lv * 100) + '%;background:' + c + '"></div>') +
+      '</div>'
+    ).join('') +
+  '</div>';
+}
+
+function renderMetricCard(m) {
+  const deltaStyle = m.deltaTone || m.tone
+    ? 'color:var(--status-' + (m.deltaTone || m.tone) + '-text, var(--text-secondary))'
+    : 'color:var(--text-secondary)';
+  return '<div class="pb-metric">' +
+    '<div class="pb-metric__label">' + escHtml(m.label) + '</div>' +
+    '<div class="pb-metric__body">' +
+      '<div style="display:flex;flex-direction:column;justify-content:space-between;min-width:0">' +
+        '<div class="pb-metric__value">' + escHtml(m.value) + '</div>' +
+        (m.delta ? '<div class="pb-metric__delta" style="' + deltaStyle + '">' + escHtml(m.delta) + '</div>' : '') +
+      '</div>' +
+      renderMiniChart(m.levels || [0.45, 1, 0.5], m.highlight !== undefined ? m.highlight : 1, m.tone || 'blue', m.color) +
+    '</div>' +
+  '</div>';
+}
+
+function renderSegmentBar(value, segments, color, track, height, width) {
+  value = value || 0;
+  segments = segments || 10;
+  color = color || 'var(--chart-1)';
+  track = track || 'var(--chart-track)';
+  height = height || 14;
+  width = width || 4;
+  const filled = Math.round((Math.max(0, Math.min(100, value)) / 100) * segments);
+  return '<span class="pb-seg" role="meter" aria-valuenow="' + value + '" aria-valuemin="0" aria-valuemax="100">' +
+    Array.from({ length: segments }, (_, i) =>
+      '<span style="width:' + width + 'px;height:' + height + 'px;background:' + (i < filled ? color : track) + '"></span>'
+    ).join('') +
+  '</span>';
+}
+
+function renderTodayMetrics(stats, items) {
+  const barEl = document.getElementById('today-metrics-bar');
+  if (!barEl) return;
+  const companies = stats.companies || 0;
+  const contacts = stats.prospects || 0;
+  const signals = stats.signals_confirmed || 0;
+  const pending = (items || []).filter(i => i.tone !== 'good').length;
+  const outbox = stats.outbox_pending || 0;
+  const convos = stats.open_conversations || 0;
+
+  const metrics = [
+    { label: 'Active Companies', value: companies, delta: stats.unprofiled ? stats.unprofiled + ' need reading' : 'All profiled', tone: 'blue', color: 'var(--chart-1)', levels: [0.4, 0.7, 1], highlight: 2 },
+    { label: 'Total Contacts', value: contacts, delta: 'Verified leads', tone: 'pink', color: 'var(--chart-2)', levels: [0.55, 1, 0.7], highlight: 1 },
+    { label: 'Signals Confirmed', value: signals, delta: 'Active filters', tone: 'azure', color: 'var(--chart-3)', levels: [1, 0.6, 0.3], highlight: 0 },
+    { label: 'Decisions Needed', value: pending, delta: pending ? pending + ' awaiting human' : 'Queue clear', tone: pending ? 'orange' : 'green', deltaTone: pending ? 'orange' : 'green', color: pending ? 'var(--chart-6)' : 'var(--chart-5)', levels: [0.3, 1, 0.5], highlight: 1 },
+    { label: 'Outbox Pending', value: outbox, delta: (stats.outbox_approved || 0) + ' scheduled', tone: outbox ? 'orange' : 'green', deltaTone: outbox ? 'orange' : 'green', color: outbox ? 'var(--chart-6)' : 'var(--chart-5)', levels: [0.5, 0.8, 1], highlight: 2 },
+    { label: 'Live Conversations', value: convos, delta: 'WhatsApp & Email', tone: 'purple', color: 'var(--chart-4)', levels: [0.65, 0.45, 1], highlight: 2 },
+  ];
+
+  barEl.innerHTML = metrics.map(renderMetricCard).join('');
 }
 
 // ── Today: what needs a human ──
@@ -186,6 +284,8 @@ async function loadToday() {
 
   navCount('nav-today', (data.items || []).filter(i => i.tone !== 'good').length);
   navCount('nav-outbox', (data.stats || {}).outbox_pending || 0);
+
+  renderTodayMetrics(data.stats || {}, data.items || []);
   renderFigures(data.stats || {});
 
   const items = data.items || [];
@@ -199,33 +299,135 @@ async function loadToday() {
     return;
   }
 
-  el.innerHTML = '<div class="queue">' + items.map(it =>
-    '<div class="queue-item ' + escHtml(it.tone || 'warn') + '">' +
-      '<div class="qtext">' +
-        '<div class="qtitle">' + escHtml(it.title) + '</div>' +
-        '<div class="qdetail">' + escHtml(it.detail) + '</div>' +
-      '</div>' +
-      '<button class="btn btn-secondary btn-sm" onclick="goTab(\'' + escHtml(it.tab) + '\')">' +
-        escHtml(it.action) + '</button>' +
-    '</div>'
-  ).join('') + '</div>';
+  el.innerHTML = '<div class="queue">' + items.map(it => {
+    const isWarn = it.tone === 'warn';
+    const isBad = it.tone === 'bad';
+    const statusColor = isBad ? 'var(--status-danger)' : isWarn ? 'var(--status-warning)' : 'var(--status-success)';
+    return (
+      '<div class="queue-item ' + escHtml(it.tone || 'warn') + '">' +
+        '<div style="display:flex;align-items:flex-start;gap:12px;flex:1;min-width:0">' +
+          '<span class="pb-chip" style="margin-top:2px;width:28px;height:28px">' +
+            '<span class="pb-status" style="width:10px;height:10px;background:' + statusColor + '"></span>' +
+          '</span>' +
+          '<div class="qtext">' +
+            '<div class="qtitle">' + escHtml(it.title) + '</div>' +
+            '<div class="qdetail">' + escHtml(it.detail) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn btn-primary btn-sm" onclick="goTab(\'' + escHtml(it.tab) + '\')">' +
+          escHtml(it.action) + '</button>' +
+      '</div>'
+    );
+  }).join('') + '</div>';
 }
 
 function renderFigures(stats) {
   const el = document.getElementById('today-figures');
   if (!el) return;
-  const row = (label, value) =>
-    '<div class="figure"><span class="k">' + label + '</span>' +
-    '<span class="v' + (value ? '' : ' zero') + '">' + value + '</span></div>';
+  const row = (label, value, color, pct) =>
+    '<div class="figure">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' +
+        '<span class="k" style="display:inline-flex;align-items:center;gap:6px">' +
+          '<span class="pb-status" style="width:8px;height:8px;background:' + color + '"></span>' +
+          label +
+        '</span>' +
+        '<span class="v' + (value ? '' : ' zero') + '">' + value + '</span>' +
+      '</div>' +
+      (pct !== undefined ? '<div style="margin-top:3px">' + renderSegmentBar(pct, 10, color, 'var(--chart-track)', 8, 3) + '</div>' : '') +
+    '</div>';
+
+  const comp = stats.companies || 0;
+  const pros = stats.prospects || 0;
+  const sigs = stats.signals_confirmed || 0;
+  const unprof = stats.unprofiled || 0;
+  const pend = stats.outbox_pending || 0;
+  const apprv = stats.outbox_approved || 0;
+  const conv = stats.open_conversations || 0;
 
   el.innerHTML = '<div class="figures">' +
-    row('Companies', stats.companies || 0) +
-    row('Contacts', stats.prospects || 0) +
-    row('Signals on', stats.signals_confirmed || 0) +
-    row('Not yet read', stats.unprofiled || 0) +
-    row('Awaiting approval', stats.outbox_pending || 0) +
-    row('Scheduled', stats.outbox_approved || 0) +
-    row('Live conversations', stats.open_conversations || 0) +
+    row('Companies', comp, 'var(--chart-1)', comp > 0 ? 80 : 0) +
+    row('Contacts', pros, 'var(--chart-2)', pros > 0 ? 90 : 0) +
+    row('Signals on', sigs, 'var(--chart-3)', sigs > 0 ? 60 : 0) +
+    row('Not yet read', unprof, 'var(--chart-6)', unprof > 0 ? 40 : 0) +
+    row('Awaiting approval', pend, 'var(--chart-6)', pend > 0 ? 50 : 0) +
+    row('Scheduled', apprv, 'var(--chart-5)', apprv > 0 ? 70 : 0) +
+    row('Conversations', conv, 'var(--chart-4)', conv > 0 ? 85 : 0) +
+  '</div>';
+}
+
+// ── Cold outreach: how many were messaged, how many answered, and why it
+// stopped. The counters alone leave "it went quiet" unexplained, so the
+// reason the sender is idle is rendered with them, not inferred from a gap.
+
+async function loadOutreach() {
+  const el = document.getElementById('today-outreach');
+  if (!el) return;
+  const data = await api('/api/outreach');
+  if (!data || data.error) {
+    el.innerHTML = data && data.error
+      ? '<div class="card"><p class="muted">Métricas de prospecção indisponíveis: ' + escHtml(data.error) + '</p></div>'
+      : '';
+    return;
+  }
+  const s = data.stats || {}, cap = data.cap || {}, q = data.queue || {}, st = data.status || {};
+  const pct = x => Math.round((x || 0) * 100) + '%';
+  const TONE = { bad: 'var(--status-danger)', warn: 'var(--status-warning)',
+                 good: 'var(--status-success)', idle: 'var(--text-tertiary)' };
+  const capLabel = cap.cap ? cap.sent_today + ' de ' + cap.cap : (cap.sent_today || 0);
+
+  const cards = [
+    { label: 'Hoje', value: (s.contacted_today || 0) + ' frias · ' + (s.replied_today || 0) + ' respostas',
+      delta: capLabel + ' do limite do dia · ' + (cap.left || 0) + ' ainda cabem',
+      tone: (cap.left ? 'blue' : 'orange'), color: cap.left ? 'var(--chart-3)' : 'var(--chart-6)' },
+    { label: 'Contatos frios (total)', value: s.contacted || 0,
+      delta: (s.contacted_7d || 0) + ' nos últimos 7 dias',
+      tone: 'blue', color: 'var(--chart-1)' },
+    { label: 'Responderam (total)', value: s.replied || 0,
+      delta: pct(s.rate) + ' de resposta · ' + (s.engaged || 0) + ' com interesse',
+      tone: 'green', color: 'var(--chart-5)' },
+    { label: 'Sem resposta', value: s.awaiting || 0,
+      delta: (s.meetings || 0) + ' reuniões · ' + (s.refused || 0) + ' recusaram',
+      tone: 'pink', color: 'var(--chart-2)' },
+  ];
+
+  // The whole history, one column per day: a bar for cold messages and a
+  // thinner one for the answers they got back, so a quiet stretch and a dead
+  // stretch look different at a glance.
+  const days = data.by_day || [];
+  const max = Math.max(...days.map(d => Math.max(d.sent || 0, d.replied || 0)), 1);
+  const bar = (n, color) => '<div style="flex:1;min-width:2px;border-radius:2px;height:' +
+    Math.max(Math.round((n || 0) / max * 100), 2) + '%;background:' +
+    (n ? color : 'var(--chart-track)') + '"></div>';
+  const bars = days.map(d =>
+    '<div title="' + escHtml(d.day) + ': ' + (d.sent || 0) + ' frias, ' + (d.replied || 0) + ' respostas" ' +
+      'style="flex:1;min-width:4px;height:46px;display:flex;align-items:flex-end;gap:1px">' +
+      bar(d.sent, 'var(--chart-1)') + bar(d.replied, 'var(--chart-5)') +
+    '</div>').join('');
+  const legend = (color, text) =>
+    '<span style="display:inline-flex;align-items:center;gap:4px">' +
+      '<span style="width:8px;height:8px;border-radius:2px;background:' + color + '"></span>' + text + '</span>';
+
+  el.innerHTML = '<div class="card" style="margin-bottom:20px">' +
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
+      '<div><h2 style="margin:0">Prospecção fria' +
+        (data.enabled ? '' : ' <span class="badge t-idle">WhatsApp desligado</span>') + '</h2>' +
+        '<p class="muted" style="margin:4px 0 0;font-size:12.5px">Quantas lojas o Harvey abordou, ' +
+        'quantas responderam e por que o envio está parado ou andando.</p></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;min-width:0">' +
+        '<span class="pb-status" style="width:10px;height:10px;flex-shrink:0;background:' +
+          (TONE[st.tone] || TONE.idle) + '"></span>' +
+        '<div style="min-width:0"><div style="font-size:13px;font-weight:600">' + escHtml(st.title || '') + '</div>' +
+        '<div class="muted" style="font-size:12px">' + escHtml(st.detail || '') + '</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="metrics" style="margin-top:16px">' + cards.map(renderMetricCard).join('') + '</div>' +
+    (days.length ? '<div style="margin-top:16px">' +
+      '<div class="muted" style="font-size:11.5px;margin-bottom:6px;display:flex;gap:12px;flex-wrap:wrap">' +
+        '<span>Por dia desde ' + escHtml(days[0].day) + ' (' + days.length + ' dias)</span>' +
+        legend('var(--chart-1)', 'frias') + legend('var(--chart-5)', 'respostas') +
+        '<span>último envio: ' + escHtml(s.last_sent ? formatDate(s.last_sent) : 'nenhum') + '</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:3px;align-items:flex-end">' + bars + '</div></div>' : '') +
   '</div>';
 }
 
@@ -234,14 +436,14 @@ async function loadTodayActivity() {
   if (!el) return;
   const data = await api('/api/activity');
   if (!Array.isArray(data) || !data.length) {
-    el.innerHTML = '<p class="muted" style="font-size:12.5px">' +
+    el.innerHTML = '<p class="muted" style="font-size:12.5px;padding:8px 6px">' +
       'Nothing yet. Every action Harvey takes shows up here.</p>';
     return;
   }
   el.innerHTML = '<div class="activity-feed">' + data.slice(0, 12).map(a =>
     '<div class="activity-item">' +
       '<span class="time">' + formatDate(a.created_at) + '</span>' +
-      '<span class="agent">' + escHtml(a.agent) + '</span>' +
+      '<span class="badge t-active">' + escHtml(a.agent) + '</span>' +
       '<span class="action">' + escHtml(String(a.action_type).replace(/_/g, ' ')) + '</span>' +
     '</div>').join('') + '</div>';
 }
@@ -336,12 +538,42 @@ async function loadSignals() {
 
   const s = data.summary || {};
   navCount('nav-signals', s.proposed || 0);
-  sumEl.innerHTML = '<div class="sig-summary">' +
-    ['confirmed', 'proposed', 'rejected'].map(k =>
-      '<div class="sig-stat ' + k + '"><div class="n">' + (s[k] || 0) + '</div>' +
-      '<div class="k">' + (k === 'proposed' ? 'awaiting you' : k) + '</div></div>'
-    ).join('') +
-    '</div>';
+  const confCount = s.confirmed || 0;
+  const propCount = s.proposed || 0;
+  const rejCount = s.rejected || 0;
+
+  sumEl.innerHTML = '<div class="metrics" style="margin-bottom:20px">' +
+    renderMetricCard({
+      label: 'Confirmed Signals',
+      value: confCount,
+      delta: confCount ? 'Actively collected' : 'None active yet',
+      tone: 'green',
+      deltaTone: 'green',
+      color: 'var(--chart-5)',
+      levels: [0.4, 0.7, 1],
+      highlight: 2
+    }) +
+    renderMetricCard({
+      label: 'Awaiting Your Decision',
+      value: propCount,
+      delta: propCount ? 'Requires confirmation' : 'All reviewed',
+      tone: propCount ? 'orange' : 'neutral',
+      deltaTone: propCount ? 'orange' : 'neutral',
+      color: propCount ? 'var(--chart-6)' : 'var(--chart-track)',
+      levels: [0.3, 1, 0.6],
+      highlight: 1
+    }) +
+    renderMetricCard({
+      label: 'Skipped / Inactive',
+      value: rejCount,
+      delta: 'Excluded from runs',
+      tone: 'red',
+      deltaTone: 'neutral',
+      color: 'var(--status-danger)',
+      levels: [1, 0.4, 0.2],
+      highlight: 0
+    }) +
+  '</div>';
 
   grpEl.innerHTML = (data.groups || []).map(g => {
     const codes = g.signals.map(x => x.code);
@@ -371,15 +603,19 @@ function sigRow(sig) {
   const costCls = free ? 'free' : (/\$/.test(sig.cost_note || '') ? 'paid' : '');
   const seen = sig.companies
     ? '<span class="cost-chip">seen on ' + sig.companies +
-      (sig.companies === 1 ? ' company' : ' companies') + ' so far</span>' : '';
+      (sig.companies === 1 ? ' company' : ' companies') + '</span>' : '';
   const floor = sig.confidence_floor > 0
-    ? '<span class="cost-chip">only recorded above ' +
+    ? '<span class="cost-chip">&ge; ' +
       Math.round(sig.confidence_floor * 100) + '% confidence</span>' : '';
 
-  const decide = sig.status === 'confirmed'
+  const isConfirmed = sig.status === 'confirmed';
+  const isRejected = sig.status === 'rejected';
+  const statusColor = isConfirmed ? 'var(--status-success)' : isRejected ? 'var(--border-strong)' : 'var(--status-warning)';
+
+  const decide = isConfirmed
     ? '<button class="btn btn-secondary btn-sm" onclick="setSignals([\'' + sig.code +
         '\'],\'rejected\')">Turn off</button>'
-    : sig.status === 'rejected'
+    : isRejected
       ? '<button class="btn btn-secondary btn-sm" onclick="setSignals([\'' + sig.code +
           '\'],\'confirmed\')">Turn on</button>'
       : '<button class="btn btn-primary btn-sm" onclick="setSignals([\'' + sig.code +
@@ -387,10 +623,15 @@ function sigRow(sig) {
         '<button class="btn btn-secondary btn-sm" onclick="setSignals([\'' + sig.code +
           '\'],\'rejected\')">Skip</button>';
 
-  return '<div class="sig-row ' + (sig.status === 'rejected' ? 'rejected' : '') + '">' +
+  return '<div class="sig-row ' + (isRejected ? 'rejected' : '') + '">' +
+    '<div style="display:flex;align-items:center;padding-top:4px">' +
+      '<span class="pb-status" style="width:10px;height:10px;background:' + statusColor + '"></span>' +
+    '</div>' +
     '<div class="sig-main">' +
-      '<div class="sig-label">' + escHtml(sig.label || sig.code) +
-        '<span class="sig-code">' + escHtml(sig.code) + '</span></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span class="sig-label">' + escHtml(sig.label || sig.code) + '</span>' +
+        '<span class="badge t-idle" style="font-family:var(--font-mono);font-size:10px">' + escHtml(sig.code) + '</span>' +
+      '</div>' +
       '<div class="sig-desc">' + escHtml(sig.description) + '</div>' +
       '<div class="sig-meta">' +
         '<span class="cost-chip ' + costCls + '">' + escHtml(sig.cost_note || 'cost unknown') + '</span>' +
@@ -951,6 +1192,87 @@ function quotaCardHtml(data) {
   return html;
 }
 
+// ── Openers: WhatsApp first-message A/B/C test ──
+
+const OPENER_NAMES = { A: 'Original', B: 'Pergunta curta', C: 'Motivo + pergunta rápida' };
+const OPENER_MIN_SAMPLE = 40;
+
+async function loadOpeners() {
+  const data = await api('/api/openers');
+  const statsEl = document.getElementById('openers-stats');
+  const tableEl = document.getElementById('openers-table');
+  const exEl = document.getElementById('openers-examples');
+  if (!data) { statsEl.innerHTML = offlineState(); return; }
+  if (data.error) { statsEl.innerHTML = emptyState('&#9888;', 'Erro ao carregar', escHtml(data.error)); return; }
+
+  const stats = data.stats || [];
+  const active = new Set(data.active || []);
+  if (!stats.length) {
+    statsEl.innerHTML = emptyState('&#9993;', 'Nenhuma abertura enviada ainda',
+      'Assim que o Harvey mandar as primeiras mensagens frias, a comparação aparece aqui.');
+    tableEl.style.display = 'none'; exEl.innerHTML = '';
+    return;
+  }
+  const pct = x => Math.round((x || 0) * 100) + '%';
+  const best = Math.max(...stats.filter(s => s.sent >= OPENER_MIN_SAMPLE).map(s => s.rate), -1);
+  const openerColors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-4)'];
+
+  statsEl.innerHTML = '<div class="metrics" style="margin-bottom:20px">' + stats.map((s, idx) => {
+    const isBest = s.sent >= OPENER_MIN_SAMPLE && s.rate === best;
+    const color = openerColors[idx % openerColors.length];
+    const rateVal = Math.round((s.rate || 0) * 100);
+    const tag = active.has(s.variant) ? '<span class="badge t-good" style="font-size:10px">ativa</span>' : '<span class="badge t-idle" style="font-size:10px">aposentada</span>';
+    const lead = isBest ? ' <span class="badge t-note" style="font-size:10px">melhor</span>' : '';
+    const small = s.sent < OPENER_MIN_SAMPLE ? ' <span class="cost-chip" style="font-size:10px">amostra pequena</span>' : '';
+
+    return '<div class="pb-metric">' +
+      '<div class="pb-metric__label" style="display:flex;justify-content:space-between;align-items:center">' +
+        '<span>Variante ' + escHtml(s.variant) + ' · ' + escHtml(OPENER_NAMES[s.variant] || '') + '</span>' +
+        '<span>' + tag + lead + '</span>' +
+      '</div>' +
+      '<div class="pb-metric__body">' +
+        '<div style="display:flex;flex-direction:column;justify-content:space-between;min-width:0">' +
+          '<div class="pb-metric__value">' + pct(s.rate) + '</div>' +
+          '<div style="margin-top:4px">' + renderSegmentBar(rateVal, 10, color, 'var(--chart-track)', 10, 3) + '</div>' +
+          '<div class="pb-metric__delta" style="color:var(--text-secondary);font-size:11px;margin-top:6px">' +
+            s.replied + ' humanas de ' + s.sent + ' envios' + small +
+          '</div>' +
+        '</div>' +
+        renderMiniChart([0.35, Math.min(1, Math.max(0.2, (s.rate || 0) * 2)), 0.65], 1, 'blue', color) +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+
+  let h = '<h2>Comparação</h2><div class="table-card"><table><thead><tr>' +
+    '<th>Variante</th><th>Enviadas</th><th>Humanas</th><th>Taxa humana</th><th>Só automáticas</th><th>Interesse registrado</th>' +
+    '<th>Recusaram</th><th>Reuniões</th><th>Últimos 7 dias</th><th>Período</th></tr></thead><tbody>';
+  for (const s of stats) {
+    h += '<tr><td><b>' + escHtml(s.variant) + '</b> <span class="muted">' + escHtml(OPENER_NAMES[s.variant] || '') + '</span></td>' +
+      '<td>' + s.sent + '</td><td>' + s.replied + '</td><td><b>' + pct(s.rate) + '</b></td>' +
+      '<td>' + (s.automatic_only || 0) + '</td><td>' + (s.interested || 0) + '</td>' +
+      '<td>' + s.refused + '</td><td>' + s.meetings + '</td>' +
+      '<td>' + s.replied_7d + '/' + s.sent_7d + ' <span class="muted">(' + pct(s.rate_7d) + ')</span></td>' +
+      '<td class="muted">' + formatDate(s.first_sent) + ' → ' + formatDate(s.last_sent) + '</td></tr>';
+  }
+  tableEl.innerHTML = h + '</tbody></table></div>' +
+    '<p class="muted" style="margin-top:10px">Contatos marcados como teste ficam fora da comparação. Resposta humana inclui saudações e recusas. Interesse é a classificação registrada, não uma ativação ou venda confirmada.</p>';
+  tableEl.style.display = 'block';
+
+  const examples = data.examples || {};
+  exEl.innerHTML = Object.keys(examples).sort().map(v => {
+    const rows = examples[v].map(e =>
+      '<div style="padding:10px 0;border-top:1px solid var(--border)">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:4px">' +
+          '<b>' + escHtml(e.company) + '</b>' +
+          '<span>' + (e.replied ? badge('replied') : e.automatic_only ? '<span class="badge t-idle">resposta automática</span>' : '<span class="badge t-idle">sem resposta</span>') +
+          ' <span class="muted">' + formatDate(e.sent_at) + '</span></span>' +
+        '</div>' +
+        '<div style="white-space:pre-wrap;font-size:13px">' + escHtml(e.body) + '</div>' +
+      '</div>').join('');
+    return '<div class="card"><h2>Últimas da ' + escHtml(v) + ' · ' + escHtml(OPENER_NAMES[v] || '') + '</h2>' + rows + '</div>';
+  }).join('');
+}
+
 async function loadUsage() {
   const data = await api('/api/usage');
   const statsEl = document.getElementById('usage-stats');
@@ -964,18 +1286,28 @@ async function loadUsage() {
   // Totals cards — usage-first (calls is the headline; tokens as chips).
   // No dollars: on a subscription plan usage isn't billed per token.
   const t = data.totals || {};
-  const card = (label, p) => {
+  const card = (label, p, tone, color, levels, highlight) => {
     p = p || {};
-    return '<div class="stat-card"><div class="label">' + label + '</div>' +
-      '<div class="value">' + (p.calls || 0) + '</div>' +
-      '<div class="breakdown">' +
-        '<span class="chip">calls</span>' +
-        '<span class="chip">out <b>' + fmtTokens(p.output_tokens) + '</b></span>' +
-        '<span class="chip">in <b>' + fmtTokens(p.input_tokens) + '</b></span>' +
-        '<span class="chip">cached <b>' + fmtTokens(p.cache_read_tokens) + '</b></span>' +
-      '</div></div>';
+    const outT = fmtTokens(p.output_tokens);
+    const inT = fmtTokens(p.input_tokens);
+    const cacheT = fmtTokens(p.cache_read_tokens);
+
+    return renderMetricCard({
+      label: label,
+      value: (p.calls || 0).toLocaleString() + ' calls',
+      delta: 'out ' + outT + ' · in ' + inT + ' · cached ' + cacheT,
+      tone: tone || 'blue',
+      color: color || 'var(--chart-1)',
+      levels: levels || [0.4, 0.8, 1],
+      highlight: highlight !== undefined ? highlight : 2
+    });
   };
-  statsEl.innerHTML = card('Today', t.today) + card('Last 7 Days', t.week) + card('Last 30 Days', t.month);
+
+  statsEl.innerHTML = '<div class="metrics" style="margin-bottom:20px">' +
+    card('Today', t.today, 'blue', 'var(--chart-1)', [0.4, 1, 0.6], 1) +
+    card('Last 7 Days', t.week, 'pink', 'var(--chart-2)', [0.6, 0.8, 1], 2) +
+    card('Last 30 Days', t.month, 'azure', 'var(--chart-3)', [0.7, 1, 0.85], 1) +
+  '</div>';
 
   // Daily bars — output tokens per day (the work done)
   const dailyEl = document.getElementById('usage-daily');
@@ -1137,7 +1469,7 @@ function deskGo(n) {
 
 // Keyboard review. Ignored while typing into a field, so Settings still works.
 document.addEventListener('keydown', e => {
-  if (currentTab !== 'outbox' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (document.body.classList.contains('nav-open') || currentTab !== 'outbox' || e.metaKey || e.ctrlKey || e.altKey) return;
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
   const cur = _desk.items[_desk.i];
@@ -1308,15 +1640,41 @@ async function loadConversations() {
     let threadHtml = '';
     for (const msg of (c.thread || [])) {
       const cls = msg.sender === 'harvey' ? 'sent' : 'received';
-      threadHtml += '<div class="thread-msg ' + cls + '"><div class="sender">' + escHtml(msg.sender) +
-        ' &middot; ' + formatDate(msg.timestamp) + '</div>' + escHtml(msg.content) + '</div>';
+      const senderLabel = msg.sender === 'harvey' ? 'Harvey' : (c.first_name || 'Prospect');
+      threadHtml += '<div class="thread-msg ' + cls + '">' +
+        '<div class="sender"><span>' + escHtml(senderLabel) + '</span><time>' + formatDate(msg.timestamp) + '</time></div>' +
+        '<div class="msg-content">' + escHtml(msg.content) + '</div></div>';
     }
     const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unknown';
-    html += '<div class="convo-card"><h3>' + escHtml(name) +
-      (c.company ? ' <span style="color:var(--text-3);font-weight:500">&mdash; ' + escHtml(c.company) + '</span>' : '') + '</h3>' +
-      '<div class="meta">' + badge(c.status) + (c.intent ? badge(c.intent) : '') +
-      '<span>' + escHtml(c.prospect_email || '') + '</span><span>' + formatDate(c.updated_at) + '</span></div>' +
-      (threadHtml || '<p style="color:var(--text-3);font-size:13px">No messages in this thread yet.</p>') + '</div>';
+    const initials = (name === 'Unknown' && c.company ? c.company : name)
+      .split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'P';
+    const isWhatsApp = (c.channel || '').toLowerCase() === 'whatsapp';
+    const channelBadge = isWhatsApp
+      ? '<span class="badge" style="background:var(--pb-green-50);color:var(--pb-green-600);border-color:rgba(4,169,67,0.25)">WhatsApp</span>'
+      : '<span class="badge" style="background:var(--pb-blue-50);color:var(--pb-blue-600);border-color:rgba(76,141,246,0.25)">Email</span>';
+
+    html += '<div class="convo-card">' +
+      '<div class="convo-head">' +
+        '<div class="convo-avatar ' + (isWhatsApp ? 'wa' : 'mail') + '">' + escHtml(initials) + '</div>' +
+        '<div class="convo-info">' +
+          '<div class="convo-title">' +
+            '<h3>' + escHtml(name) + '</h3>' +
+            (c.company ? '<span class="convo-company">' + escHtml(c.company) + '</span>' : '') +
+          '</div>' +
+          '<div class="meta">' +
+            channelBadge +
+            badge(c.status) +
+            (c.intent ? badge(c.intent) : '') +
+            (c.stage ? '<span class="badge t-idle">' + escHtml(c.stage) + '</span>' : '') +
+            (c.prospect_email ? '<span class="muted">' + escHtml(c.prospect_email) + '</span>' : '') +
+            '<span class="muted"><time>' + formatDate(c.updated_at) + '</time></span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="convo-thread">' +
+        (threadHtml || '<p style="color:var(--text-tertiary);font-size:13px;padding:12px">No messages in this thread yet.</p>') +
+      '</div>' +
+    '</div>';
   }
   el.innerHTML = html;
 }
@@ -1345,6 +1703,7 @@ loadToday();
 loadSetupStatus();
 loadRuns();
 loadTodayActivity();
+loadOutreach();
 loadHarveyStatus();
 
 // Agent status: quick poll
@@ -1366,13 +1725,42 @@ setInterval(async () => {
 setInterval(() => {
   if (document.hidden) return;
   switch (currentTab) {
-    case 'today': loadToday(); loadRuns(); loadTodayActivity(); break;
+    case 'today': loadToday(); loadRuns(); loadTodayActivity(); loadOutreach(); break;
     case 'companies': if (!companyDrill) loadCompanies(); break;
     case 'prospects': loadProspects(); break;
     case 'campaigns': loadCampaigns(); break;
     case 'conversations': loadConversations(); break;
     case 'activity': loadActivity(); break;
+    case 'openers': loadOpeners(); break;
     case 'usage': loadUsage(); break;
     case 'controls': loadLogs(); break;
   }
 }, 15000);
+
+// Responsive navigation keeps every operational screen available on small devices.
+function toggleNavigation(open = !document.body.classList.contains('nav-open')) {
+  document.body.classList.toggle('nav-open', open);
+  const toggle = document.getElementById('menu-toggle');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+  }
+  const activeBtn = document.querySelector('nav button.active');
+  if (open && activeBtn) activeBtn.focus();
+  else if (document.activeElement && document.activeElement.closest && document.activeElement.closest('nav') && toggle) toggle.focus();
+}
+document.addEventListener('keydown', event => {
+  if (!document.body.classList.contains('nav-open')) return;
+  if (event.key === 'Escape') toggleNavigation(false);
+  if (event.key === 'Tab') {
+    const toggle = document.getElementById('menu-toggle');
+    const items = [toggle, ...document.querySelectorAll('nav button')].filter(Boolean);
+    if (!items.length) return;
+    event.preventDefault();
+    const index = items.indexOf(document.activeElement);
+    items[(index + (event.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+  }
+});
+window.matchMedia('(min-width: 861px)').addEventListener('change', () => toggleNavigation(false));
+const initialActive = document.querySelector('nav button.active');
+if (initialActive) initialActive.setAttribute('aria-current', 'page');

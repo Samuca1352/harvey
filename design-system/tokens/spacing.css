@@ -1,0 +1,22 @@
+:root{
+--space-0:0;--space-px:1px;--space-0-5:2px;--space-1:4px;--space-1-5:6px;--space-2:8px;--space-2-5:10px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--space-16:64px;--space-20:80px;
+
+--radius-xs:3px;   /* chart bars, status squares */
+--radius-sm:6px;   /* tags, kbd, count pills */
+--radius-md:8px;   /* buttons, inputs, nav items, icon chips, rows */
+--radius-lg:10px;  /* inset boxes inside cards */
+--radius-xl:12px;  /* cards, panels */
+--radius-2xl:16px; /* dialogs, composer, large panels */
+--radius-3xl:24px; /* marketing tiles */
+--radius-full:999px;
+
+/* Layout */
+--sidebar-width:248px;
+--topbar-height:64px;
+--rail-width:280px;
+--content-pad:16px;
+--content-max:1440px;
+--control-h-sm:28px;--control-h-md:36px;--control-h-lg:44px;
+--icon-chip:32px;
+--bp-mobile:640px;--bp-tablet:960px;--bp-desktop:1200px;
+}

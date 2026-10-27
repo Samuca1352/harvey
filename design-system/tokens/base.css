@@ -1,0 +1,8 @@
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:var(--type-body);color:var(--text-primary);background:var(--bg-app);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+a{color:var(--text-link);text-decoration:none}
+a:hover{color:var(--text-secondary)}
+button,input,select,textarea{font:inherit;color:inherit}
+code,pre,kbd{font-family:var(--font-mono)}
+::selection{background:var(--pb-sky-200)}

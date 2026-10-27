@@ -160,6 +160,9 @@ class WhatsAppChannelConfig(BaseModel):
     # short question about their shop) and compare reply rates with
     # `harvey whatsapp stats`. False = always A.
     opener_test: bool = True
+    # Openers new prospects are split between (A: original pitch, B: short
+    # question, C: motive + quick question). Retired variants keep their stats.
+    opener_variants: list[str] = ["A", "B"]
     # No cold messages before this local time ("2026-10-23T08:00"), e.g. while
     # WhatsApp has the number restricted. Replies still go out. "" = no pause.
     cold_paused_until: str = ""
@@ -180,6 +183,15 @@ class WhatsAppChannelConfig(BaseModel):
     # A WhatsApp group (its JID, "...@g.us") that gets the same alerts, so more
     # than one person sees them. Takes precedence over notify_phone.
     notify_group: str = ""
+
+    @field_validator("opener_variants", mode="before")
+    @classmethod
+    def _known_variants(cls, v) -> list[str]:
+        v = [str(x).strip().upper() for x in (v or [])]
+        bad = [x for x in v if x not in ("A", "B", "C")]
+        if bad or not v:
+            raise ValueError("opener_variants must be a non-empty list of A, B, C")
+        return list(dict.fromkeys(v))
 
     @field_validator("notify_group", mode="before")
     @classmethod
