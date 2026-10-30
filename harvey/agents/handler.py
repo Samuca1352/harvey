@@ -9,6 +9,7 @@ sending domain while nobody's watching.
 
 import asyncio
 import logging
+import random
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -20,6 +21,7 @@ from harvey.config import whatsapp_persona_name
 from harvey.gate import BANNED_PHRASES, WHATSAPP_BANNED_PHRASES, pre_send_check_whatsapp
 from harvey.integrations.whatsapp import (
     HANDOFF_SUBJECT,
+    PROPOSAL_PDF_SUBJECT,
     WhatsAppClient,
     _parse_ts,
     contact_first_name,
@@ -46,16 +48,30 @@ NO_FOLLOWUP_STATUSES = {"opted_out", "lost", "meeting", "closed"}
 
 WA_FOLLOWUP = (
     "RETOMADA: a pessoa parou de responder depois da sua última mensagem. Escreva uma mensagem "
-    "curta (até 35 palavras) que traga algo novo e útil ligado ao que ela contou da loja: um "
-    "recurso da vitrine ou um benefício que ainda não apareceu na conversa. Não cobre resposta, "
-    "não diga \"viu minha mensagem?\", \"só passando\" nem \"retomando\", não repita nada que já "
-    "disse. Sem pergunta, ou no máximo uma pergunta leve."
+    "curta (até 35 palavras) que traga algo novo e útil ligado ao que ela contou da loja. Se "
+    "você ainda não enviou nenhum link na conversa, inclua https://loja-demo.prospectboost.com.br "
+    "para ela ver uma loja pronta no celular, ou ofereça montar a prévia grátis com 3 produtos "
+    "do Instagram dela. Não cobre resposta, não diga \"viu minha mensagem?\", \"só passando\" nem "
+    "\"retomando\", não repita nada que já disse. Sem pergunta, ou no máximo uma pergunta leve."
 )
 WA_FOLLOWUP_LAST = (
     "ÚLTIMA RETOMADA: a pessoa está há alguns dias sem responder. Escreva uma mensagem curtíssima "
-    "(até 25 palavras) e leve que deixe a porta aberta: se um dia quiser testar, os 15 dias grátis "
-    "são sem cartão e ela cria a loja sozinha em 1 minuto. Se você já ofereceu o teste há pouco, deixe a porta aberta sem "
-    "repetir a oferta. Sem pergunta, sem pressão; não diga que é a última mensagem nem que ela sumiu."
+    "(até 30 palavras) e leve que deixe a porta aberta: se um dia quiser testar os 15 dias grátis "
+    "(sem cartão), basta criar em 1 minuto em https://painel.prospectboost.com.br/cadastro ou "
+    "mandar o @ do Instagram que montamos a prévia pra ela. Se já mandou esse link há pouco, "
+    "deixe a porta aberta sem repetir. Sem pergunta, sem pressão."
+)
+AUTO_GREETING_FOLLOWUP_HOURS = 2
+MAX_AUTO_NUDGES_PER_PASS = 2
+WA_AUTO_NUDGE = (
+    "RETOMADA APÓS MENSAGEM AUTOMÁTICA: a loja respondeu só com uma saudação ou mensagem "
+    "automática (ex.: 'Como podemos ajudar?', 'Responderemos em breve') e nenhum humano "
+    "respondeu ainda. Escreva uma mensagem curta (até 35 palavras) respondendo direto ao "
+    "'Como podemos ajudar?': explique em uma frase que montamos uma vitrine online com sacola "
+    "pro WhatsApp, mande o exemplo https://loja-demo.prospectboost.com.br e ofereça montar "
+    "uma prévia grátis de 15 dias com os produtos do Instagram deles (se o @ já apareceu na "
+    "mensagem automática, diga que pode puxar de lá; se não, peça o @ ou 3 fotos). "
+    "Não diga 'vi que era mensagem automática' nem cobre resposta."
 )
 
 INTENT_LABELS = {
@@ -92,7 +108,10 @@ FAREWELL_RE = re.compile(r"obrigad[oa]|valeu|boas vendas|boa semana|bom trabalho
 def requested_next_step(text: str) -> str:
     """A trial and an appointment are different commitments; hours alone prove neither."""
     trial = re.search(
-        r"\b(?:quero|vamos|pode|gostaria de) (?:testar|experimentar|come[cç]ar|fechar)\b",
+        r"\b(?:quero|vamos|pode|gostaria de) (?:testar|experimentar|come[cç]ar|fechar|montar)\b"
+        r"|\bmonta(?:r)? pra mim\b"
+        r"|instagram\.com/[A-Za-z0-9_.]+"
+        r"|(?<!\w)@[A-Za-z0-9_.]{3,}",
         text, re.I,
     )
     no_call = re.search(
@@ -168,6 +187,21 @@ OPT_OUT_RE_PT = re.compile(r"\b(?:" + "|".join(OPT_OUT_WORDS_PT) + r")\b", re.IG
 # yes to the explanation, not a request for a video.
 DEMO_REQUEST_RE = re.compile(
     r"\bv[ií]deos?\b|exemplo|demonstra|alguma (loja|empresa)|loja (pronta|funcionando)",
+    re.IGNORECASE,
+)
+PROPOSAL_REQUEST_RE = re.compile(
+    r"\bproposta\b|\bor[cç]amento\b|tabela de (?:pre[cç]os?|valores?)|encaminhar.*valores?",
+    re.IGNORECASE,
+)
+PROPOSAL_DELAY_SECONDS = (120, 210)
+# A prospect saying "I thought it was different / only for X / doesn't pay off" after
+# seeing a generic demo is voicing a fit/value objection, not an explicit refusal.
+FIT_OBJECTION_RE = re.compile(
+    r"achei que (?:era|fosse)|n[aã]o compensa|s[oó] pr[ao]\b|mais para\b|t[aá] caro|muito caro|n[aã]o serve pr[ao]",
+    re.IGNORECASE,
+)
+HARD_REFUSAL_RE = re.compile(
+    r"\bn[aã]o (?:quero|tenho interesse|temos interesse|preciso|precisamos|vou querer)\b",
     re.IGNORECASE,
 )
 # Harvey's own reply promised that a designer will send something: the
@@ -579,6 +613,9 @@ class Handler:
         # or immediately via Instantly (legacy).
         if channel == "whatsapp":
             await self._queue_whatsapp_reply(response, prospect, convo, intent)
+            if PROPOSAL_REQUEST_RE.search(reply_text):
+                await self._queue_whatsapp_proposal_pdf(prospect, convo)
+                await self._notify_owner("proposal", prospect, convo)
         elif self.is_native:
             await self._queue_native_reply(
                 response, prospect, convo, reply_meta or {}, intent
@@ -782,6 +819,41 @@ class Handler:
             logger.info(f"Handler: processed {handled} WhatsApp conversation(s).")
         return complete
 
+    async def _promote_stale_auto_greetings(self, now: datetime):
+        """Turn ignored bot greetings into 'ooo' conversations once 2+ hours pass with no human reply."""
+        cutoff = (now - timedelta(hours=AUTO_GREETING_FOLLOWUP_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+        async with self.state._connect() as db:
+            async with db.execute(
+                """SELECT p.id, json_extract(a.details_json, '$.message') AS message,
+                          MAX(a.created_at) AS last_at
+                   FROM actions a
+                   JOIN prospects p ON p.phone = json_extract(a.details_json, '$.prospect_phone')
+                   WHERE a.action_type = 'whatsapp_auto_message'
+                     AND json_valid(a.details_json)
+                     AND replace(a.created_at, 'T', ' ') <= ?
+                     AND NOT EXISTS (
+                         SELECT 1 FROM conversations c
+                         WHERE c.prospect_id = p.id AND c.channel = 'whatsapp'
+                     )
+                   GROUP BY p.id""",
+                (cutoff,),
+            ) as cur:
+                rows = await cur.fetchall()
+        for prospect_id, message, last_at in rows:
+            if not message or prospect_id in self.wa_unread:
+                continue
+            prospect = await self.state.get_prospect(prospect_id)
+            if not prospect or prospect.status in NO_FOLLOWUP_STATUSES:
+                continue
+            ts = (_parse_ts(last_at) or now.replace(tzinfo=timezone.utc)).replace(tzinfo=None)
+            convo = Conversation(
+                id="", prospect_id=prospect.id, channel="whatsapp",
+                intent="ooo", status="open",
+                thread=[Message(sender="prospect", content=message, timestamp=ts)],
+            )
+            await self.state.add_conversation(convo)
+            await self.state.update_prospect_status(prospect.id, "replied")
+
     async def _whatsapp_followups(self):
         """Nudge people who replied and then went quiet; never cold silence.
 
@@ -793,8 +865,13 @@ class Handler:
         if not delays or not self.wa.is_configured():
             return
         now = datetime.now(timezone.utc).replace(tzinfo=None)
+        await self._promote_stale_auto_greetings(now)
+        auto_nudges = 0
         for convo in await self.state.get_conversations_by_status("open"):
-            if convo.channel != "whatsapp" or not convo.thread or convo.thread[-1].sender != "harvey":
+            if convo.channel != "whatsapp" or not convo.thread:
+                continue
+            is_ooo = convo.intent == "ooo"
+            if not is_ooo and convo.thread[-1].sender != "harvey":
                 continue
             heard = [m.timestamp for m in convo.thread if m.sender == "prospect"]
             if not heard:
@@ -816,17 +893,27 @@ class Handler:
             if await self.state.get_setting(f"{HANDED_OFF_KEY}{prospect.id}"):
                 continue                # they sent us to someone else: talk to them
             quiet = now - convo.thread[-1].timestamp
-            if len(done) >= len(delays):
-                if quiet >= timedelta(hours=delays[-1]):
-                    await self._notify_owner("cold", prospect, convo)
-                continue
-            if quiet < timedelta(hours=delays[len(done)]):
-                continue
+            if is_ooo:
+                if len(done) >= 1 or quiet < timedelta(hours=AUTO_GREETING_FOLLOWUP_HOURS):
+                    continue
+                if auto_nudges >= MAX_AUTO_NUDGES_PER_PASS:
+                    continue
+                followup_prompt = WA_AUTO_NUDGE
+            else:
+                if len(done) >= len(delays):
+                    if quiet >= timedelta(hours=delays[-1]):
+                        await self._notify_owner("cold", prospect, convo)
+                    continue
+                if quiet < timedelta(hours=delays[len(done)]):
+                    continue
+                followup_prompt = WA_FOLLOWUP_LAST if len(done) + 1 == len(delays) else WA_FOLLOWUP
             body = await self._generate_whatsapp_response(
                 convo.intent, "", prospect, convo,
-                followup=WA_FOLLOWUP_LAST if len(done) + 1 == len(delays) else WA_FOLLOWUP,
+                followup=followup_prompt,
             )
             if body:
+                if is_ooo:
+                    auto_nudges += 1
                 if DESIGNER_PROMISE_RE.search(body):
                     await self._notify_owner("demo", prospect, convo)
                 await self._queue_whatsapp_reply(body, prospect, convo, "followup", kind="followup")
@@ -920,6 +1007,23 @@ class Handler:
                 if trigger.lower() in reply_text.lower():
                     hint = f"\nAbordagem sugerida para essa objeção: {response}"
                     break
+            if FIT_OBJECTION_RE.search(reply_text or ""):
+                hint += (
+                    "\nOBJEÇÃO DE ENCAIXE/UTILIDADE: o cliente achou que a loja-demo (que está "
+                    "com roupas de exemplo) não serve pro ramo dele ou 'não compensa'. Explique "
+                    "de forma direta que a loja-demo usa roupas só como exemplo, mas para a loja "
+                    "dele montamos sob medida pro nicho dele (categorias, detalhes técnicos/opções "
+                    "do produto e pedido direto no WhatsApp), além das 2 artes por semana feitas "
+                    "por designer no Pro para divulgar no Instagram/Status. Ofereça montar uma "
+                    "prévia grátis só com 3 produtos dele pra ele ver na prática antes de julgar."
+                )
+        if PROPOSAL_REQUEST_RE.search(reply_text or ""):
+            hint += (
+                "\nPEDIDO DE PROPOSTA/ORÇAMENTO: diga de forma curta e humana que já vai "
+                "montar e formalizar a proposta personalizada da loja em PDF e manda aqui "
+                "em uns 2 minutinhos (pode adiantar em meia frase que começa em R$ 97/mês "
+                "com 15 dias grátis)."
+            )
         prompt += (
             f"\n\nConversa até agora:\n{history}\n\n"
             + (followup if followup else f"Intenção do cliente: {intent}{hint}")
@@ -1095,6 +1199,8 @@ class Handler:
             head = "Cliente interessado em artes (um designer deve enviar o portfólio)"
         elif kind == "demo":
             head = "Cliente pediu vídeo ou exemplo (mande pelo celular do Harvey)"
+        elif kind == "proposal":
+            head = "Cliente pediu proposta de valores (Harvey enviará o PDF personalizado em ~3 min)"
         elif kind == "cold":
             head = "Conversa esfriou (sem resposta depois das retomadas)"
         else:
@@ -1135,6 +1241,36 @@ class Handler:
             details={"prospect_id": prospect.id, "conversation_id": convo.id,
                      "reason": "material handoff notification unavailable", "kind": kind},
         )
+
+    async def _queue_whatsapp_proposal_pdf(self, prospect, convo):
+        """Queue a personalized PDF proposal to go out 2–3.5 minutes after our immediate reply."""
+        key = f"wa_proposal_pdf:{convo.id}"
+        if await self.state.get_setting(key):
+            return
+        require_approval = self.wa_cfg.require_approval if self.wa_cfg else True
+        delay = random.randint(*PROPOSAL_DELAY_SECONDS)
+        send_at = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=delay)).isoformat()
+        short = (prospect.company or "sua loja").split(" - ")[0].split(" | ")[0].strip()
+        caption = (
+            f"Finalizei a proposta em PDF aqui pra você com os detalhes da {short}! "
+            "Se quiser que a gente já monte a prévia grátis de 15 dias com as fotos do "
+            "Instagram de vocês, é só me mandar o @ por aqui."
+        )
+        item_id = await self.state.add_outbox_item(
+            prospect_id=prospect.id,
+            conversation_id=convo.id,
+            kind="reply",
+            to_email=prospect.phone,
+            subject=PROPOSAL_PDF_SUBJECT,
+            body=caption,
+            send_at=send_at,
+            status="pending_review" if require_approval else "approved",
+            provider="wa-akg",
+            channel="whatsapp",
+        )
+        if item_id:
+            await self.state.set_setting(key, "1")
+            logger.info(f"Handler: Personalized PDF proposal for {prospect.company} queued (+{delay}s).")
 
     async def _queue_whatsapp_reply(
         self, response: str, prospect, convo, intent: str, kind: str = "reply"
@@ -1252,16 +1388,25 @@ class Handler:
             f"{'Harvey' if m.sender == 'harvey' else 'Cliente'}: {m.content}"
             for m in (convo.thread[-12:] if convo else [])
         )
+        ours = [m.content for m in (convo.thread if convo else []) if m.sender == "harvey"]
         if channel == "whatsapp":
             opener = await self.state.get_first_sent_whatsapp(prospect.id)
             if opener:
                 history = f"Primeira mensagem do Harvey: {opener}\n{history}"
+                ours = ours or [opener]
+        # She answered what we asked: that is engagement, never a courtesy.
+        answered_us = bool(ours) and "?" in ours[-1] and not ACKNOWLEDGMENT_RE.fullmatch(reply_text)
         prompt = f"""Classify the latest {channel} message into exactly ONE category.
 Use the previous conversation to interpret what the person is responding to.
 - "interested" — explicitly wants to learn more, see the product, or start a trial;
-  an affirmative answer to our offer (e.g. "pode explicar sim") also counts
-- "objection" — has concerns but hasn't said no (price, timing, competition)
-- "not_interested" — a clear no, not now, or "we're all set"
+  an affirmative answer to our offer (e.g. "pode explicar sim") also counts, and so
+  does answering a question we asked (e.g. we asked how customers buy, they say
+  "geralmente pede opções")
+- "objection" — has concerns or doubts about fit, utility, price, timing, or how the
+  demo applies to their segment ("achei que era diferente", "só pra telefone", "mais
+  para produtos", "não compensa", "tá caro", or "someone else already offered me a
+  catalog and I didn't like it"); they haven't explicitly refused to talk
+- "not_interested" — an explicit refusal ("não tenho interesse", "não quero", "já temos site e não queremos trocar")
 - "unsubscribe" — asks to stop being contacted, remove from list, opt out
 - "escalate" — angry, hostile, threatens legal action, or mentions spam/compliance
 - "ooo" — out of office / auto-reply
@@ -1306,11 +1451,17 @@ Respond with ONLY the category label, nothing else."""
         # Robust extraction: take the first recognized label anywhere in
         # the response (models sometimes add explanation despite instructions).
         cleaned = result.strip().strip('"').strip("'").lower()
-        if cleaned in INTENT_LABELS:
-            return cleaned
-        for label in sorted(INTENT_LABELS, key=len, reverse=True):
-            if label in cleaned:
-                return label
+        label = cleaned if cleaned in INTENT_LABELS else next(
+            (l for l in sorted(INTENT_LABELS, key=len, reverse=True) if l in cleaned), ""
+        )
+        if label == "acknowledgment" and answered_us:
+            logger.info("Handler: they answered our question; treating as interested, not a courtesy.")
+            return "interested"
+        if label == "not_interested" and FIT_OBJECTION_RE.search(reply_text) and not HARD_REFUSAL_RE.search(reply_text):
+            logger.info("Handler: fit/value doubt treated as objection, not refusal.")
+            return "objection"
+        if label:
+            return label
 
         logger.warning(f"Handler: Unknown intent '{cleaned[:80]}'. Defaulting to 'question'.")
         return "question"

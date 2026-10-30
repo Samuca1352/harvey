@@ -120,6 +120,7 @@ WHATSAPP_BANNED_PHRASES = BANNED_PHRASES + (
 )
 
 WHATSAPP_MAX_WORDS = 90      # a chat message, not an email
+WHATSAPP_MAX_LINKS = 2       # demo link + signup link when needed in a reply
 PHONE_RE = re.compile(r"^\d{10,15}$")
 
 
@@ -158,7 +159,7 @@ def pre_send_check_whatsapp(
     # Links in a cold first message are what gets a number reported.
     if kind == "sequence" and URL_RE.findall(body):
         reasons.append("link in a cold first message")
-    elif len(URL_RE.findall(body)) > MAX_LINKS:
+    elif len(URL_RE.findall(body)) > WHATSAPP_MAX_LINKS:
         reasons.append("too many links")
 
     if re.search(r"<\s*(html|body|div|table|img|a)\b", body, re.IGNORECASE):

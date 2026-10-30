@@ -16,11 +16,12 @@ import pytest_asyncio
 
 from harvey.agents.handler import DEMO_REQUEST_RE, Handler, is_auto_message, wants_opt_out_pt
 from harvey.agents.sender import Sender
-from harvey.agents.whatsapp import WhatsAppAgent
+from harvey.agents.whatsapp import SOCKET_REPLACED_KEY, WhatsAppAgent
 from harvey.collectors import discover as D
 from harvey.config import EnvConfig, WhatsAppChannelConfig, load_config
 from harvey.gate import pre_send_check_whatsapp
 from harvey.integrations.whatsapp import (
+    WaHealth,
     WaInbound,
     WaSendResult,
     HANDOFF_SUBJECT,
@@ -127,6 +128,10 @@ async def test_client_send_text():
 async def test_client_send_failures_know_if_retry_is_safe():
     r = await _client(lambda q: httpx.Response(503, json={"message": "WhatsApp session is disconnected"})).send_text("5511912345678", "x")
     assert not r.ok and r.retryable
+    for err in ("Connection Closed", "Failed to send message"):
+        c = _client(lambda q, e=err: httpx.Response(500, json={"error": e}))
+        r = await c.send_text("5511912345678", "x")
+        assert not r.ok and r.retryable and c.not_ready
     r = await _client(lambda q: httpx.Response(400, json={"status": False, "message": "bad jid"})).send_text("5511912345678", "x")
     assert not r.ok and not r.retryable
 
@@ -143,8 +148,12 @@ async def test_client_send_failures_know_if_retry_is_safe():
 
 @pytest.mark.asyncio
 async def test_client_exists():
+    # A negative is only believed from a settled socket, so "no" has to answer
+    # the monitor route too.
+    settled = {"data": {"status": "CONNECTED", "uptimeMs": 600_000}}
     ok = lambda q: httpx.Response(200, json={"data": {"results": [{"number": "x", "exists": True, "jid": "j"}]}})
-    no = lambda q: httpx.Response(200, json={"data": {"results": [{"number": "x", "exists": False, "jid": None}]}})
+    no = lambda q: httpx.Response(200, json=settled if "/system/monitor/" in q.url.path else
+                                 {"data": {"results": [{"number": "x", "exists": False, "jid": None}]}})
     down = lambda q: httpx.Response(503)
     assert await _client(ok).exists("5511912345678") is True
     assert await _client(no).exists("5511912345678") is False
@@ -280,13 +289,30 @@ class FakeWa:
 
     status = "CONNECTED"
     starts = 0
+    stops = 0
+    # What /api/system/monitor reports: a settled socket unless a test says
+    # otherwise. uptime_ms=0 with known=False is the pre-monitor gateway.
+    health_known = True
+    uptime_ms = 300_000
 
     async def session_status(self):
         return self.status if not self.online else "CONNECTED"
 
+    async def health(self):
+        if self.online:
+            return WaHealth("CONNECTED", "Online", self.uptime_ms, self.health_known)
+        # Offline: whatever status the test asked for, and no socket behind it.
+        offline = self.status if self.status != "CONNECTED" else "DISCONNECTED"
+        return WaHealth(offline, "Offline", 0, self.health_known)
+
     async def start_session(self):
         self.starts += 1
         self.online = True
+        return True
+
+    async def stop_session(self):
+        self.stops += 1
+        self.online = False
         return True
 
 
@@ -416,6 +442,12 @@ async def test_send_waits_for_approval(state):
 async def test_send_holds_while_session_is_offline(state):
     agent = await staged_agent(state)
     agent.client.online = False
+
+    async def wont_start():                 # the gateway can't bring it back
+        agent.client.starts += 1
+        return False
+    agent.client.start_session = wont_start
+
     await agent.send()
     assert agent.client.sent == []
     assert (await state.get_outbox(channel="whatsapp"))[0]["status"] == "approved"
@@ -1046,6 +1078,7 @@ def test_closing_is_not_triggered_by_ordinary_agreement():
     assert stage("pode ser, me explica") != "closing"
     assert stage("qual o horário de funcionamento de vocês?") != "closing"
     assert stage("quero testar") == "closing"
+    assert stage("pode montar pra mim, meu insta é @lojadamaria") == "closing"
     assert stage("pode ser amanhã às 10h") == "closing"
     assert stage("vamos agendar uma reunião") == "closing"
     assert h._determine_stage("interested", "negotiating", "postamos sim") == "negotiating"
@@ -1428,6 +1461,49 @@ async def test_a_session_that_needs_a_qr_code_is_not_restarted(state):
 
 
 @pytest.mark.asyncio
+async def test_a_socket_the_gateway_already_holds_is_not_restarted(state):
+    # The gateway's own reconnect is in flight. Starting a second socket on
+    # the number is what makes WhatsApp answer "conflict: replaced".
+    agent = await staged_agent(state)
+    agent.client.online = False
+    agent.client.status = "CONNECTING"
+    await agent.send()
+    assert agent.client.starts == 0 and agent.client.sent == []
+
+
+@pytest.mark.asyncio
+async def test_a_session_connected_only_in_the_database_is_started(state):
+    # The split brain: /api/sessions says CONNECTED from a row that outlived
+    # its socket, while the gateway holds no instance at all.
+    agent = await staged_agent(state)
+    agent.client.online = False
+    agent.client.status = "CONNECTED"        # what session_status() would say
+    await agent.send()
+    assert agent.client.starts == 1
+
+
+@pytest.mark.asyncio
+async def test_a_socket_replaced_again_and_again_stops_the_session(state):
+    # Every pass finds a younger socket than the last: two sessions on one
+    # number knocking each other off. Starting it again only feeds the loop.
+    agent = await staged_agent(state)
+    for age in (9_000, 6_000, 3_000, 1_000):
+        agent.client.uptime_ms = age
+        await agent.ensure_online()
+    assert agent.client.stops == 1 and agent.client.starts == 0
+    assert await agent.state.get_setting(SOCKET_REPLACED_KEY) == "0"
+
+
+@pytest.mark.asyncio
+async def test_a_socket_that_keeps_growing_is_left_alone(state):
+    agent = await staged_agent(state)
+    for age in (1_000, 4_000, 9_000, 20_000):
+        agent.client.uptime_ms = age
+        assert await agent.ensure_online()
+    assert agent.client.stops == 0 and agent.client.starts == 0
+
+
+@pytest.mark.asyncio
 async def test_restarts_are_rate_limited(state):
     agent = await staged_agent(state)
     agent.client.online = False
@@ -1730,3 +1806,244 @@ async def test_watcher_over_budget_still_sends_written_replies_but_reads_nothing
 
     await asyncio.wait_for(whatsapp_watcher(Handler(), Agent(), Brain(), config, stop), 5)
     assert calls == [("send", True)]
+
+
+@pytest.mark.asyncio
+async def test_a_connected_session_answering_not_ready_is_restarted():
+    # The gateway lost the socket but still says CONNECTED; calls answer 503.
+    calls = {"start": 0}
+
+    def handler(request):
+        if request.url.path.endswith("/check"):
+            if calls["start"]:
+                return httpx.Response(200, json={"data": {"results": [{"exists": True}]}})
+            return httpx.Response(503, json={"status": False, "message": "Session not ready"})
+        if request.url.path.endswith("/restart"):
+            calls["start"] += 1
+            return httpx.Response(200, json={"status": True})
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    client = _client(handler)
+    assert await client.session_status() == "CONNECTED"
+    assert await client.exists("5511912345678") is None
+    assert await client.session_status() == "NOT_READY"
+    assert not (await client.test_connection())[0]
+    # A restart only means the request was accepted. The latch stays until a
+    # call that actually needs the socket comes back 200 — the gateway reports
+    # CONNECTED from a database row that outlives the socket it describes.
+    assert await client.start_session()
+    assert await client.session_status() == "NOT_READY"
+    assert await client.exists("5511912345678") is True
+    assert await client.session_status() == "CONNECTED"
+
+
+@pytest.mark.asyncio
+async def test_answering_our_question_is_not_taken_for_a_courtesy(state):
+    prospect = await contacted_prospect(state)
+    assert "?" in await state.get_first_sent_whatsapp(prospect.id)
+    handler = make_handler(state, intent="acknowledgment")      # the model misreads it
+    handler.wa.inbound["5511912345678"] = inbound("Oi", "Geralmente pede opções")
+    await handler.run()
+    replies = [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"]
+    assert len(replies) == 1
+    assert (await state.get_conversations_by_status("open"))[0].stage == "engaged"
+
+
+@pytest.mark.asyncio
+async def test_a_plain_thanks_after_our_question_stays_a_courtesy(state):
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="acknowledgment")
+    handler.wa.inbound["5511912345678"] = inbound("Obrigada!")
+    await handler.run()
+    assert [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_flapping_socket_cannot_declare_a_number_unreachable():
+    # What burned 193 good prospects: a socket being replaced every few
+    # seconds answers 200 with exists=false for every number alike.
+    def handler(request):
+        if "/system/monitor/" in request.url.path:
+            return httpx.Response(200, json={"data": {"status": "CONNECTED", "uptimeMs": 1_200}})
+        if request.url.path.endswith("/check"):
+            return httpx.Response(200, json={"data": {"results": [{"exists": False}]}})
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    assert await _client(handler).exists("5511912345678") is None
+
+
+@pytest.mark.asyncio
+async def test_a_settled_socket_may_declare_a_number_unreachable():
+    def handler(request):
+        if "/system/monitor/" in request.url.path:
+            return httpx.Response(200, json={"data": {"status": "CONNECTED", "uptimeMs": 600_000}})
+        if request.url.path.endswith("/check"):
+            return httpx.Response(200, json={"data": {"results": [{"exists": False}]}})
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    assert await _client(handler).exists("5511912345678") is False
+
+
+@pytest.mark.asyncio
+async def test_a_positive_check_needs_no_second_opinion():
+    looks = {"monitor": 0}
+
+    def handler(request):
+        if "/system/monitor/" in request.url.path:
+            looks["monitor"] += 1
+            return httpx.Response(200, json={"data": {"status": "CONNECTED", "uptimeMs": 1_000}})
+        if request.url.path.endswith("/check"):
+            return httpx.Response(200, json={"data": {"results": [{"exists": True}]}})
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    assert await _client(handler).exists("5511912345678") is True
+    assert looks["monitor"] == 0
+
+
+@pytest.mark.asyncio
+async def test_health_reads_the_socket_not_the_database_row():
+    # The two shapes /api/system/monitor really answers with: a live instance,
+    # and none at all (which it still reports with HTTP 200).
+    live = {"data": {"status": "CONNECTED", "uptimeMs": 904_112, "ping": "Online"}}
+    none = {"data": {"status": "DISCONNECTED", "uptime": 0, "ping": "Offline"}}
+    payloads = [live, none]
+
+    def handler(request):
+        if "/system/monitor/" in request.url.path:
+            return httpx.Response(200, json=payloads.pop(0))
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    client = _client(handler)
+    health = await client.health()
+    assert health.known and health.live and health.uptime_ms == 904_112
+
+    health = await client.health()
+    assert health.known and not health.live and not health.coming_up
+    assert health.uptime_ms == 0                 # "uptime", not "uptimeMs"
+
+
+@pytest.mark.asyncio
+async def test_health_on_a_gateway_without_the_monitor_route_is_unknown():
+    def handler(request):
+        if "/system/monitor/" in request.url.path:
+            return httpx.Response(404, json={"status": False})
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    health = await _client(handler).health()
+    assert not health.known and not health.live
+
+
+@pytest.mark.asyncio
+async def test_a_send_to_a_vanished_session_marks_it_not_ready():
+    def handler(request):
+        if request.url.path.endswith("/send"):
+            return httpx.Response(500, json={"error": "WhatsApp session is disconnected or not found"})
+        return httpx.Response(200, json={"data": {"status": "CONNECTED"}})
+
+    client = _client(handler)
+    assert not (await client.send_text("5511912345678", "Oi")).ok
+    assert await client.session_status() == "NOT_READY"
+
+
+@pytest.mark.asyncio
+async def test_auto_greeting_or_ooo_gets_a_single_followup_after_two_hours(state):
+    from datetime import datetime, timedelta, timezone
+    from harvey.models.conversation import Conversation, Message
+    prospect = await contacted_prospect(state)
+    handler = make_handler(state)
+    handler.wa_cfg.require_approval = False
+    then = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
+    convo = Conversation(
+        id="", prospect_id=prospect.id, channel="whatsapp", intent="ooo", status="open",
+        thread=[Message(sender="prospect", content="Zanini Presentes agradece seu contato. Como podemos ajudar?", timestamp=then)],
+    )
+    convo.id = await state.add_conversation(convo)
+
+    await handler.run()
+    items = await followups(state)
+    assert len(items) == 1
+
+    agent = make_agent(state)
+    agent.client.sent.clear()
+    await agent.send()
+    assert len(agent.client.sent) == 1
+    assert (await followups(state))[0]["status"] == "sent"
+
+    # Never sends a second follow-up if no human ever replied
+    await handler.run()
+    assert len(await followups(state)) == 1
+
+
+@pytest.mark.asyncio
+async def test_stores_without_own_website_are_prioritized_in_prepare_and_send(state):
+    from harvey.agents.whatsapp import has_own_website
+    from harvey.models.company import Company
+
+    with_site = Company(
+        name="Boutique Com Site", domain="boutiquecomsite.com.br",
+        website="https://boutiquecomsite.com.br", industry="Loja de roupas",
+        phone="(17) 99111-1111",
+    )
+    insta_only = Company(
+        name="Moda Só Insta", domain="instagram.com",
+        website="https://instagram.com/modasoinsta", industry="Loja de roupas",
+        phone="(17) 99222-2222",
+    )
+    no_site = Company(
+        name="Loja Sem Site", domain="", website="", industry="Loja de roupas",
+        phone="(17) 99333-3333",
+    )
+    assert has_own_website(with_site) is True
+    assert has_own_website(insta_only) is False
+    assert has_own_website(no_site) is False
+
+    await state.add_company(with_site)
+    await state.add_company(no_site)
+
+    companies = await state.get_companies_needing_whatsapp_prospect(limit=1)
+    assert [c.name for c in companies] == ["Loja Sem Site"]
+
+    agent = make_agent(state)
+    await agent.prepare()
+    prospects = {p.company: p for p in await state.get_prospects_by_status("new")}
+    assert prospects["Loja Sem Site"].score > prospects["Boutique Com Site"].score
+
+
+@pytest.mark.asyncio
+async def test_proposal_request_queues_delayed_personalized_pdf_and_notifies_owner(state):
+    from harvey.integrations.whatsapp import PROPOSAL_PDF_SUBJECT
+    from harvey.proposal import build_proposal_html, proposal_filename
+
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="question")
+    handler.wa_cfg.require_approval = False
+    handler.wa_cfg.notify_group = "120363428715949829@g.us"
+    handler.wa.inbound["5511912345678"] = inbound("Você poderia me encaminhar proposta de valores?")
+    await handler.run()
+
+    replies = [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"]
+    assert len(replies) == 2
+    assert any(i["subject"] == "" for i in replies)
+    pdf_item = next(i for i in replies if i["subject"] == PROPOSAL_PDF_SUBJECT)
+    assert "proposta em PDF" in pdf_item["body"]
+    assert any("pediu proposta de valores" in msg for _, msg in handler.wa.sent)
+    assert proposal_filename("PontoK Semijóias") == "Proposta-PontoK-Semijoias.pdf"
+    assert "Champagne &amp; Ouro 18k" in build_proposal_html("PontoK Semijóias", "Joalheria")
+
+
+@pytest.mark.asyncio
+async def test_fit_doubt_after_demo_is_treated_as_objection_not_refusal(state):
+    await contacted_prospect(state)
+    handler = make_handler(state, intent="not_interested")
+    handler.wa.inbound["5511912345678"] = inbound(
+        "eu achei que era diferente\nsó pra telefone\nmais para produtos\nnão compensa"
+    )
+    await handler.run()
+    convos = await state.get_conversations_by_status("open")
+    assert len(convos) == 1
+    assert convos[0].intent == "objection"
+    replies = [i for i in await state.get_outbox(channel="whatsapp") if i["kind"] == "reply"]
+    assert len(replies) == 1
+
+
+

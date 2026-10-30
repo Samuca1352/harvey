@@ -32,6 +32,7 @@ from harvey.config import EnvConfig, HarveyConfig, whatsapp_persona_name
 from harvey.gate import pre_send_check_whatsapp
 from harvey.integrations.whatsapp import (
     HANDOFF_SUBJECT,
+    PROPOSAL_PDF_SUBJECT,
     WhatsAppClient,
     _parse_ts,
     is_mobile,
@@ -46,6 +47,19 @@ SOURCE = "whatsapp:business"
 VARIANT_KEY = "wa_variant:"
 REVIVE_KEY = "wa_last_revive"
 REVIVE_EVERY_SECONDS = 600
+# Each start that fails to produce a lasting socket widens the wait, so a
+# gateway that cannot hold the session is asked once an hour, not every cycle.
+REVIVE_ATTEMPTS_KEY = "wa_revive_attempts"
+REVIVE_BACKOFF_MAX_SECONDS = 7200
+# A socket that keeps being replaced by a younger one is a conflict loop, not
+# a session settling in. Counted across passes, since blocking to watch it
+# would stall replies.
+SOCKET_AGE_KEY = "wa_socket_age_ms"
+SOCKET_REPLACED_KEY = "wa_socket_replaced"
+MAX_SOCKET_REPLACEMENTS = 3
+# Up this long and it is plainly not being replaced every few seconds, so its
+# age stops being worth writing down.
+SOCKET_STABLE_MS = 60_000
 PROVIDER = "wa-akg"
 KILL_SWITCH_KEY = "sending_paused"
 
@@ -115,6 +129,23 @@ RECENT_OPENERS = 40
 
 # Prospect statuses that mean "stop messaging this person".
 STOP_STATUSES = {"replied", "opted_out", "lost", "meeting", "closed"}
+# Link-in-bio, social, WhatsApp shorteners, and discontinued Google sites do not count as a store's own website.
+NON_WEBSITE_DOMAINS = re.compile(
+    r"(^|\.|/)(instagram\.com|instsgram\.com|facebook\.com|linktr\.ee|heylink\.me|linkbio\.vip|"
+    r"acesse\.one|bit\.ly|tinyurl\.com|l1nk\.dev|wa\.me|w\.app|contate\.me|"
+    r"mechameaqui\.com\.br|mechamenozap\.com\.br|negocio\.site)\b",
+    re.I,
+)
+
+
+def has_own_website(company) -> bool:
+    """True when the business already has a standalone website (not just an Instagram or link-in-bio)."""
+    if company is None:
+        return False
+    raw = ((company.domain or "") + " " + (company.website or "")).strip().lower()
+    if not raw:
+        return False
+    return not bool(NON_WEBSITE_DOMAINS.search(raw))
 
 
 def _plain(text: str) -> str:
@@ -219,6 +250,7 @@ class WhatsAppAgent:
                 source=SOURCE,
                 source_url=company.source_url,
                 status=status,
+                score=0.0 if has_own_website(company) else 10.0,
                 personalization_notes=note,
             ))
             if status == "new":
@@ -232,10 +264,11 @@ class WhatsAppAgent:
     async def write(self) -> int:
         """Draft a first message for new WhatsApp prospects and stage it."""
         self.skills = self.brain.load_skills_for_agent("writer")
-        prospects = [
-            p for p in await self.state.get_prospects_by_status("new")
-            if p.source == SOURCE and p.phone
-        ][:WRITE_BATCH]
+        prospects = sorted(
+            [p for p in await self.state.get_prospects_by_status("new")
+             if p.source == SOURCE and p.phone],
+            key=lambda p: (-p.score, p.created_at),
+        )[:WRITE_BATCH]
         if not prospects:
             return 0
 
@@ -408,42 +441,161 @@ class WhatsAppAgent:
         when nothing is waiting to be sent, or no replies would arrive."""
         if not self.enabled or not self.client.is_configured():
             return False
-        if (await self.client.session_status()) == "CONNECTED":
+        health = await self.client.health()
+        if health.known and health.live:
+            return await self._observe_socket(health)
+        if not health.known and (await self.client.session_status()) == "CONNECTED":
             return True
         return await self._revive_session()
 
     async def _revive_session(self) -> bool:
-        """The gateway stops a session after a few failed reconnects and never
-        retries on its own. Start it again (at most every REVIVE_EVERY), since
-        the pairing is kept; a session that needs a new QR code is reported
-        instead, because only a person can scan it."""
+        """Get the session's socket back, without becoming the reason it is
+        down.
+
+        The gateway reports a session CONNECTED from its database row, which
+        survives the socket it describes: a connect that lands after the
+        instance was dropped leaves the row saying CONNECTED with nothing
+        behind it. So the decision is made on what the gateway holds in
+        memory, and it has exactly two branches — if no instance exists, start
+        one; if one exists, wait for it. Starting a second socket on a number
+        that already has one is what makes WhatsApp reply "conflict:
+        replaced", and each replacement reconnects into another, forever.
+        """
+        health = await self.client.health()
+        if not health.known:
+            return await self._revive_by_status()
+
+        if health.live:
+            return await self._observe_socket(health)
+        if health.needs_qr:
+            logger.error(
+                f"WhatsApp: the session needs a new QR code ({health.status}). Scan it in "
+                "WA-AKG (Sessões / QR); sending holds until then."
+            )
+            return False
+        if health.coming_up:
+            return False       # the gateway's own socket is on its way
+
+        if not await self._backoff_elapsed():
+            return False
+        logger.warning("WhatsApp: the gateway holds no session; starting it.")
+        if not await self.client.start_session():
+            await self._note_revive_failed()
+            return False
+        health = await self.client.health()
+        return health.live and await self._observe_socket(health)
+
+    async def _observe_socket(self, health) -> bool:
+        """Whether a connected socket can be trusted with a message.
+
+        A healthy socket's age only grows. In a conflict loop every new socket
+        replaces the last, so the age keeps dropping back to seconds; counting
+        those drops across passes (rather than blocking here, which would
+        stall replies) is what tells a settling session from a looping one.
+        Once it is clearly a loop the way out is to stop the session and leave
+        it stopped, because starting it again only feeds the loop.
+        """
+        if health.uptime_ms >= SOCKET_STABLE_MS:
+            # Up for long enough that it is plainly not being replaced; stop
+            # writing its age down every pass.
+            await self._note_session_healthy()
+            return True
+        try:
+            previous = int(await self.state.get_setting(SOCKET_AGE_KEY) or -1)
+        except ValueError:
+            previous = -1
+        try:
+            replaced = int(await self.state.get_setting(SOCKET_REPLACED_KEY) or 0)
+        except ValueError:
+            replaced = 0
+
+        if 0 <= health.uptime_ms < previous:
+            replaced += 1
+            await self.state.set_setting(SOCKET_REPLACED_KEY, str(replaced))
+        await self.state.set_setting(SOCKET_AGE_KEY, str(health.uptime_ms))
+
+        if replaced >= MAX_SOCKET_REPLACEMENTS:
+            logger.error(
+                "WhatsApp: the number has two sessions replacing each other "
+                "('conflict: replaced') — the socket never stays up. Stopping the session; "
+                "close any other WA-AKG instance or linked device on this number, then "
+                "start it in WA-AKG (Sessões). Sending holds until then."
+            )
+            await self.client.stop_session()
+            await self._reset_socket_watch()
+            await self._note_revive_failed()
+            return False
+
+        self.client.not_ready = False
+        await self.state.set_setting(REVIVE_ATTEMPTS_KEY, "0")
+        return True
+
+    async def _reset_socket_watch(self) -> None:
+        await self.state.set_setting(SOCKET_AGE_KEY, "-1")
+        await self.state.set_setting(SOCKET_REPLACED_KEY, "0")
+
+    async def _note_session_healthy(self) -> None:
+        """A socket that has been up long enough clears everything we were
+        holding against the session: the latch, the backoff and the watch."""
+        self.client.not_ready = False
+        await self.state.set_setting(REVIVE_ATTEMPTS_KEY, "0")
+        await self._reset_socket_watch()
+
+    async def _revive_by_status(self) -> bool:
+        """The pre-monitor path, for a gateway without /api/system/monitor:
+        the database-backed status is all there is to go on."""
         status = await self.client.session_status()
-        if status not in ("STOPPED", "DISCONNECTED", "CLOSED"):
+        if status not in ("STOPPED", "DISCONNECTED", "CLOSED", "NOT_READY"):
             if status in ("SCAN_QR", "LOGGED_OUT"):
                 logger.error(
                     f"WhatsApp: the session needs a new QR code ({status}). Scan it in "
                     "WA-AKG (Sessões / QR); sending holds until then."
                 )
             return False
-        last = await self.state.get_setting(REVIVE_KEY)
-        now = _now()
-        if last:
-            try:
-                if (now - datetime.fromisoformat(last)).total_seconds() < REVIVE_EVERY_SECONDS:
-                    return False
-            except ValueError:
-                pass
-        await self.state.set_setting(REVIVE_KEY, now.isoformat())
+        if not await self._backoff_elapsed():
+            return False
         logger.warning(f"WhatsApp: session was {status}; starting it again.")
         if not await self.client.start_session():
+            await self._note_revive_failed()
             return False
         for _ in range(12):
             await asyncio.sleep(5 if self.send_pacing else 0)
             if (await self.client.session_status()) == "CONNECTED":
                 logger.info("WhatsApp: session reconnected.")
+                await self._note_session_healthy()
                 await self.state.log_action(action_type="whatsapp_revived", agent="whatsapp")
                 return True
+        await self._note_revive_failed()
         return False
+
+    async def _backoff_elapsed(self) -> bool:
+        """Whether enough time has passed since the last start we asked for.
+        The wait doubles per consecutive failure, so a gateway that cannot hold
+        the session is left alone instead of restarted every cycle."""
+        attempts = await self.state.get_setting(REVIVE_ATTEMPTS_KEY)
+        try:
+            failures = max(int(attempts or 0), 0)
+        except ValueError:
+            failures = 0
+        wait = min(REVIVE_EVERY_SECONDS * (2 ** failures), REVIVE_BACKOFF_MAX_SECONDS)
+        last = await self.state.get_setting(REVIVE_KEY)
+        now = _now()
+        if last:
+            try:
+                if (now - datetime.fromisoformat(last)).total_seconds() < wait:
+                    return False
+            except ValueError:
+                pass
+        await self.state.set_setting(REVIVE_KEY, now.isoformat())
+        return True
+
+    async def _note_revive_failed(self) -> None:
+        attempts = await self.state.get_setting(REVIVE_ATTEMPTS_KEY)
+        try:
+            failures = max(int(attempts or 0), 0)
+        except ValueError:
+            failures = 0
+        await self.state.set_setting(REVIVE_ATTEMPTS_KEY, str(failures + 1))
 
     # ── daily cap and pacing ──
 
@@ -585,10 +737,12 @@ class WhatsAppAgent:
         cold_left = await self.cold_left_today()
         cold_open = cold_left > 0 and await self.cold_due()
         sent = 0
-        # Existing conversations first, then contacts a shop just shared.
+        # Existing conversations first, then contacts a shop just shared, then no-website stores.
         due.sort(key=lambda i: (
             i["kind"] != "reply", i["kind"] != "followup",
-            i.get("subject") != HANDOFF_SUBJECT, i.get("send_at") or ""
+            i.get("subject") != HANDOFF_SUBJECT,
+            -float(i.get("prospect_score") or 0),
+            i.get("send_at") or "",
         ))
         for item in due:
             if sent >= MAX_SENDS_PER_CYCLE:
@@ -660,7 +814,20 @@ class WhatsAppAgent:
                 logger.info(f"WhatsApp: {prospect.company} is still writing; holding the reply.")
                 continue
 
-            result = await self.client.send_text(phone, item["body"])
+            if item.get("subject") == PROPOSAL_PDF_SUBJECT and hasattr(self.client, "send_document"):
+                from harvey.proposal import proposal_filename, render_proposal_pdf
+                try:
+                    pdf_bytes = await render_proposal_pdf(
+                        prospect.company, prospect.industry, whatsapp_persona_name(self.config)
+                    )
+                    result = await self.client.send_document(
+                        phone, pdf_bytes, proposal_filename(prospect.company), caption=item["body"]
+                    )
+                except Exception as e:
+                    logger.warning(f"WhatsApp: PDF proposal render failed ({e}); sending caption as text.")
+                    result = await self.client.send_text(phone, item["body"])
+            else:
+                result = await self.client.send_text(phone, item["body"])
             if not result.ok:
                 if result.retryable:
                     logger.warning(f"WhatsApp: {result.error}; will retry next cycle.")
@@ -725,10 +892,14 @@ class WhatsAppAgent:
         return False
 
     async def _still_waiting(self, item: dict) -> bool:
-        """A nudge only makes sense while our message is still the last word."""
+        """A nudge only makes sense while our message is still the last word (or after an unanswered auto-greeting)."""
         convo = await self.state.get_conversation(item.get("conversation_id") or "")
-        return bool(convo and convo.status == "open" and convo.thread
-                    and convo.thread[-1].sender == "harvey")
+        if not (convo and convo.status == "open" and convo.thread):
+            return False
+        if convo.thread[-1].sender == "harvey":
+            return True
+        created = (item.get("created_at") or "").replace(" ", "T")
+        return convo.intent == "ooo" and (not created or convo.thread[-1].timestamp.isoformat() <= created)
 
     async def _append_to_thread(self, item: dict):
         try:

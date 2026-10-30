@@ -656,9 +656,9 @@
     "semantic_hash": "4a9fbca776371a286867ae7079061180"
   },
   "harvey/agents/handler.py": {
-    "mtime": 1793124566.6497161,
-    "seen": 1793124568.5927432,
-    "ast_hash": "915621f6b658a1583a2c26b960ba825c",
+    "mtime": 1793372356.7262118,
+    "seen": 1793372403.6554492,
+    "ast_hash": "3a62609bc48edf721a04d14f769c0438",
     "semantic_hash": ""
   },
   "harvey/agents/scout.py": {
@@ -674,9 +674,9 @@
     "semantic_hash": "87d4c97fc049a242c0f5808679e902cf"
   },
   "harvey/agents/whatsapp.py": {
-    "mtime": 1793124566.653716,
-    "seen": 1793124568.5927458,
-    "ast_hash": "43156b2d82a491c789df234e60c2949f",
+    "mtime": 1793371690.4327269,
+    "seen": 1793371793.7656448,
+    "ast_hash": "3eec59302fbb20936214f11cb73d47bb",
     "semantic_hash": ""
   },
   "harvey/agents/writer.py": {
@@ -740,10 +740,10 @@
     "semantic_hash": "468905a128bfa4b7173442ea958092a0"
   },
   "harvey/gate.py": {
-    "mtime": 1792523401.7479,
-    "seen": 1792856717.445744,
-    "ast_hash": "beec5248d10c2856687f3c738267f1be",
-    "semantic_hash": "beec5248d10c2856687f3c738267f1be"
+    "mtime": 1793368199.13152,
+    "seen": 1793370487.3516347,
+    "ast_hash": "5a779e16a276593d223b23209bb78012",
+    "semantic_hash": ""
   },
   "harvey/integrations/__init__.py": {
     "mtime": 1792441053.1084921,
@@ -818,9 +818,9 @@
     "semantic_hash": "20a409d9ff79df0f17d974a6a56dc5d8"
   },
   "harvey/integrations/whatsapp.py": {
-    "mtime": 1793123916.644316,
-    "seen": 1793124421.6377149,
-    "ast_hash": "da0567e0056bd844796d79da503079b3",
+    "mtime": 1793371686.7807183,
+    "seen": 1793371793.7656622,
+    "ast_hash": "d16a1de346fd9d704cfc687a179f2dae",
     "semantic_hash": ""
   },
   "harvey/main.py": {
@@ -890,9 +890,9 @@
     "semantic_hash": "6718b0f6ac40ceb20f52d1d93f0fe6b2"
   },
   "harvey/state.py": {
-    "mtime": 1793123916.644316,
-    "seen": 1793124421.637724,
-    "ast_hash": "723ba3d8cf798456c615c265d198a870",
+    "mtime": 1793370265.128546,
+    "seen": 1793370487.3516529,
+    "ast_hash": "33c1afb99d21516814f814647a2c1789",
     "semantic_hash": ""
   },
   "harvey/trainer.py": {
@@ -1112,9 +1112,9 @@
     "semantic_hash": "7744966907c94c44bf0fce6da79ff20b"
   },
   "tests/test_whatsapp.py": {
-    "mtime": 1793124566.653716,
-    "seen": 1793124568.592802,
-    "ast_hash": "12eecdf547d5ed3920b3fe108729c35d",
+    "mtime": 1793372375.8502579,
+    "seen": 1793372403.655508,
+    "ast_hash": "18d4511610144033123653fc72003bef",
     "semantic_hash": ""
   },
   "tests/test_whatsapp_conversation_context.py": {
@@ -1664,15 +1664,15 @@
     "semantic_hash": ""
   },
   "prompts/whatsapp_handoff.md": {
-    "mtime": 1793123916.648316,
-    "seen": 1793124421.637817,
-    "ast_hash": "45b30ac6a1b0da3846ada6ed1d295e5b",
+    "mtime": 1793368299.2920759,
+    "seen": 1793370487.351743,
+    "ast_hash": "9bc7d8c81dbe86cd88f2f12d7da05016",
     "semantic_hash": ""
   },
   "prompts/whatsapp_reply.md": {
-    "mtime": 1793124566.653716,
-    "seen": 1793124568.5929177,
-    "ast_hash": "728be621005bcf3f332ca398f693d9aa",
+    "mtime": 1793368298.096071,
+    "seen": 1793370487.3517437,
+    "ast_hash": "358e6d8675bc1bf137c04823c19e11bc",
     "semantic_hash": ""
   },
   "prompts/writer.md": {
@@ -1748,9 +1748,9 @@
     "semantic_hash": ""
   },
   "skills/vitrine_como_funciona.md": {
-    "mtime": 1793123916.648316,
-    "seen": 1793124421.637827,
-    "ast_hash": "2a384a976e9b7e5a9e5fec1b8fbca06c",
+    "mtime": 1793368301.2240837,
+    "seen": 1793370487.3517523,
+    "ast_hash": "7c14758dc02e76841c607a36b3cce022",
     "semantic_hash": ""
   },
   "design-system/assets/icons/arrow-left.svg": {
@@ -2315,6 +2315,18 @@
     "mtime": 1793039140.015527,
     "seen": 1793124421.637748,
     "ast_hash": "eaa06ba31fbc7fb77266a06aa676d80f",
+    "semantic_hash": ""
+  },
+  "harvey/proposal.py": {
+    "mtime": 1793371821.3370318,
+    "seen": 1793372403.6554775,
+    "ast_hash": "5e8d52de36cd3d35245ea41cca76354a",
+    "semantic_hash": ""
+  },
+  "package-lock.json": {
+    "mtime": 1792854502.4575763,
+    "seen": 1793370487.3518167,
+    "ast_hash": "2a58d4fe4e92166e9c450e3893768f3d",
     "semantic_hash": ""
   }
 }

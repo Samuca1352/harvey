@@ -931,10 +931,14 @@ class StateManager:
         if exclude_kind:
             where.append("(kind IS NULL OR kind != ?)")
             params.append(exclude_kind)
-        sql = "SELECT * FROM outbox"
+        sql = (
+            "SELECT outbox.*, "
+            "COALESCE((SELECT score FROM prospects p WHERE p.id = outbox.prospect_id), 0) AS prospect_score "
+            "FROM outbox"
+        )
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY send_at ASC, created_at ASC LIMIT ?"
+        sql += " ORDER BY prospect_score DESC, send_at ASC, created_at ASC LIMIT ?"
         params.append(int(limit))
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
@@ -1254,7 +1258,8 @@ class StateManager:
                 return [dict(r) for r in await cursor.fetchall()]
 
     async def get_companies_needing_whatsapp_prospect(self, limit: int = 50) -> list[Company]:
-        """Companies with a phone number that haven't become a WhatsApp prospect."""
+        """Companies with a phone number that haven't become a WhatsApp prospect.
+        Businesses without their own website come first."""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
@@ -1263,7 +1268,9 @@ class StateManager:
                      AND NOT EXISTS (
                          SELECT 1 FROM prospects p
                          WHERE p.company_id = c.id AND p.source = 'whatsapp:business')
-                   ORDER BY c.created_at ASC LIMIT ?""",
+                   ORDER BY (COALESCE(c.domain, '') != '' OR COALESCE(c.website, '') != '') ASC,
+                            c.created_at ASC
+                   LIMIT ?""",
                 (int(limit),),
             ) as cursor:
                 return [self._company_from_row(r) for r in await cursor.fetchall()]

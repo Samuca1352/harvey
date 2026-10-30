@@ -3,7 +3,8 @@
 WA-AKG (github.com/mrifqidaffaaditya/WA-AKG) wraps Baileys behind a REST API
 with an API-key header. Harvey uses four calls:
 
-- ``GET  /api/sessions/{session}``              is the number paired and online?
+- ``GET  /api/sessions/{session}``              is the number paired at all?
+- ``GET  /api/system/monitor/{session}``        is its socket actually alive?
 - ``POST /api/chat/{session}/check``            does this number have WhatsApp?
 - ``POST /api/messages/{session}/{jid}/send``   send a text message
 - ``GET  /api/messages/{session}/search?jid=``  read what a contact wrote back
@@ -29,6 +30,10 @@ logger = logging.getLogger("harvey.whatsapp")
 
 TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
 JID_SUFFIX = "@s.whatsapp.net"
+# How long a socket must have been up before a negative answer from it ("this
+# number has no WhatsApp") is worth acting on. A socket in a replace loop is
+# connected for a second or two at a time and says no to everything.
+SOCKET_TRUSTED_MS = 30_000
 # A "typing..." WhatsApp never cleared (app closed mid-sentence) stops
 # counting after this long.
 TYPING_FRESH_SECONDS = 60
@@ -90,6 +95,43 @@ def phone_from_jid(jid: str) -> str:
 
 
 @dataclass
+class WaHealth:
+    """What the gateway holds in memory for a session, not what its database
+    row says.
+
+    ``/api/sessions`` reads a Prisma row, and a connect that finishes after the
+    instance was dropped from the manager leaves that row saying CONNECTED
+    forever, with nothing behind it. ``/api/system/monitor`` reads
+    ``waManager.getInstance()`` and the websocket itself, so it is the only
+    answer worth acting on.
+    """
+
+    status: str = ""         # the in-memory instance's own status
+    # The gateway means this for "the websocket is OPEN", but it reads
+    # readyState off a Baileys wrapper that doesn't expose one, so a perfectly
+    # healthy socket reports "Unknown". Kept for the logs; never gate on it.
+    ping: str = ""
+    uptime_ms: int = 0       # age of THIS socket, reset by every reconnect
+    known: bool = False      # False when the route couldn't be read at all
+
+    @property
+    def live(self) -> bool:
+        """The gateway has a connected socket, so calls that need one can go."""
+        return self.status == "CONNECTED"
+
+    @property
+    def coming_up(self) -> bool:
+        """A socket of the gateway's own is on its way: waiting is right, and
+        starting a second one is what causes the conflict loop."""
+        return self.status in ("CONNECTING", "OPEN")
+
+    @property
+    def needs_qr(self) -> bool:
+        """Only a person can fix this one."""
+        return self.status in ("SCAN_QR", "LOGGED_OUT")
+
+
+@dataclass
 class WaSendResult:
     ok: bool
     message_id: str = ""
@@ -118,6 +160,31 @@ class WhatsAppClient:
         self.api_key = getattr(env, "wa_akg_api_key", "") or ""
         self.session_id = getattr(env, "wa_akg_session_id", "") or ""
         self._transport = transport
+        # The gateway can drop a session's socket and still report it
+        # CONNECTED; calls then answer 503 "Session not ready" or 500 "session
+        # is disconnected or not found". Remembered here so the status reads
+        # NOT_READY and the session gets restarted.
+        self.not_ready = False
+
+    _OFFLINE_ERRORS = (
+        "disconnected",
+        "connection closed",
+        "failed to send message",
+        "session not ready",
+    )
+
+    def _note(self, r: httpx.Response) -> None:
+        text_lower = r.text.lower()
+        if r.status_code == 503 or (
+            r.status_code == 500 and any(p in text_lower for p in self._OFFLINE_ERRORS)
+        ):
+            self.not_ready = True
+        elif r.status_code == 200:
+            self.not_ready = False
+
+    def _status(self, data: dict) -> str:
+        status = str(data.get("status") or "").upper()
+        return "NOT_READY" if status == "CONNECTED" and self.not_ready else status
 
     def is_configured(self) -> bool:
         return bool(self.base_url and self.api_key and self.session_id)
@@ -150,7 +217,7 @@ class WhatsAppClient:
         if r.status_code != 200:
             return False, f"WA-AKG answered {r.status_code}"
         data = (r.json() or {}).get("data") or {}
-        status = str(data.get("status") or "").upper()
+        status = self._status(data)
         if status != "CONNECTED":
             return False, f"session '{self.session_id}' is {status or 'unknown'}, not CONNECTED"
         me = (data.get("me") or {}).get("id", "")
@@ -164,40 +231,125 @@ class WhatsAppClient:
                 r = await c.get(self._path("sessions", self.session_id))
             if r.status_code != 200:
                 return ""
-            return str(((r.json() or {}).get("data") or {}).get("status") or "").upper()
+            return self._status((r.json() or {}).get("data") or {})
         except (httpx.HTTPError, ValueError):
             return ""
 
-    async def start_session(self) -> bool:
-        """Ask the gateway to start a stopped session. Credentials are kept by
-        the gateway, so a paired number reconnects without a new QR code."""
+    async def health(self) -> WaHealth:
+        """The live state of the session's socket. ``known=False`` when the
+        gateway is too old to have the monitor route, which leaves the caller
+        on the database-backed status."""
         try:
             async with self._client() as c:
-                r = await c.post(self._path("sessions", self.session_id, "start"))
+                r = await c.get(self._path("system", "monitor", self.session_id))
+            if r.status_code != 200:
+                return WaHealth()
+            data = (r.json() or {}).get("data") or {}
+        except (httpx.HTTPError, ValueError):
+            return WaHealth()
+        try:
+            uptime = int(data.get("uptimeMs") or 0)
+        except (TypeError, ValueError):
+            uptime = 0
+        return WaHealth(
+            status=str(data.get("status") or "").upper(),
+            ping=str(data.get("ping") or ""),
+            uptime_ms=uptime,
+            known=True,
+        )
+
+    async def start_session(self) -> bool:
+        """Ask the gateway to start a stopped session. Credentials are kept by
+        the gateway, so a paired number reconnects without a new QR code.
+
+        Uses restart (stop, then start): a plain start on a session the gateway
+        still holds mid-reconnect opens a second socket on the same number, and
+        the two knock each other off in a "conflict: replaced" loop. Callers
+        must check ``health()`` first and only come here when the gateway holds
+        no instance — a 200 here means the request was accepted, never that a
+        socket came up, so the NOT_READY latch stays until a call that needs
+        the socket actually succeeds."""
+        try:
+            async with self._client() as c:
+                r = await c.post(self._path("sessions", self.session_id, "restart"))
+            return r.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    async def stop_session(self) -> bool:
+        """Stop a session without starting it again — the way out of a
+        conflict loop, where every new socket is replaced by the next one."""
+        try:
+            async with self._client() as c:
+                r = await c.post(self._path("sessions", self.session_id, "stop"))
             return r.status_code == 200
         except httpx.HTTPError:
             return False
 
     async def exists(self, phone: str) -> bool | None:
-        """Whether the number has WhatsApp. None when it can't be determined."""
+        """Whether the number has WhatsApp. None when it can't be determined.
+
+        A socket that is being replaced every few seconds still answers 200
+        here, with ``exists: false`` for every number alike. Believing that
+        marks real prospects as unreachable for good, so a negative is only
+        taken from a socket that has been up long enough to answer for itself.
+        """
         try:
             async with self._client() as c:
                 r = await c.post(
                     self._path("chat", self.session_id, "check"),
                     json={"numbers": [phone]},
                 )
+            self._note(r)
             if r.status_code != 200:
                 return None
             data = (r.json() or {}).get("data") or {}
             results = data.get("results") if isinstance(data, dict) else data
             if not results:
                 return None
-            return bool(results[0].get("exists"))
+            found = bool(results[0].get("exists"))
         except (httpx.HTTPError, ValueError):
             return None
+        return found if found or await self._negative_is_trustworthy() else None
+
+    async def _negative_is_trustworthy(self) -> bool:
+        """Whether a "this number has no WhatsApp" answer can be acted on."""
+        health = await self.health()
+        if not health.known:
+            return True       # pre-monitor gateway: nothing better to go on
+        return health.live and health.uptime_ms >= SOCKET_TRUSTED_MS
 
     async def send_text(self, phone: str, text: str) -> WaSendResult:
         return await self.send_jid(to_jid(phone), text)
+
+    async def send_document(
+        self, phone: str, file_bytes: bytes, filename: str,
+        caption: str = "", mimetype: str = "application/pdf",
+    ) -> WaSendResult:
+        """Send a document (e.g. a personalized PDF proposal) with an optional caption."""
+        jid = to_jid(phone)
+        try:
+            async with self._client() as c:
+                r = await c.post(
+                    self._path("messages", self.session_id, jid, "media"),
+                    data={"type": "document", "caption": caption},
+                    files={"file": (filename, file_bytes, mimetype)},
+                )
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            return WaSendResult(False, error=f"gateway unreachable: {e}", retryable=True)
+        except httpx.HTTPError as e:
+            return WaSendResult(False, error=f"gateway error: {e}")
+        self._note(r)
+        try:
+            payload = r.json() or {}
+        except ValueError:
+            payload = {}
+        if r.status_code == 200 and payload.get("status", True) is not False:
+            key = ((payload.get("data") or {}).get("key") or {})
+            return WaSendResult(True, message_id=str(key.get("id") or ""))
+        detail = str(payload.get("message") or payload.get("error") or r.text)[:200]
+        offline = r.status_code == 503 or any(p in detail.lower() for p in self._OFFLINE_ERRORS)
+        return WaSendResult(False, error=f"{r.status_code}: {detail}", retryable=offline)
 
     async def send_jid(self, jid: str, text: str) -> WaSendResult:
         """Send to any chat: a person's JID or a group's (``...@g.us``)."""
@@ -212,6 +364,7 @@ class WhatsAppClient:
         except httpx.HTTPError as e:
             # A read timeout can mean the message went out: never auto-retry.
             return WaSendResult(False, error=f"gateway error: {e}")
+        self._note(r)
 
         try:
             payload = r.json() or {}
@@ -222,7 +375,8 @@ class WhatsAppClient:
             return WaSendResult(True, message_id=str(key.get("id") or ""))
 
         detail = str(payload.get("message") or payload.get("error") or r.text)[:200]
-        offline = r.status_code == 503 or "disconnected" in detail.lower()
+        detail_lower = detail.lower()
+        offline = r.status_code == 503 or any(p in detail_lower for p in self._OFFLINE_ERRORS)
         return WaSendResult(
             False, error=f"{r.status_code}: {detail}", retryable=offline,
         )
@@ -321,6 +475,8 @@ def _parse_ts(value) -> datetime | None:
 # Outbox subject that marks the first message to a contact a shop shared with
 # us: it jumps the cold queue and goes out from the fast watcher too.
 HANDOFF_SUBJECT = "contato compartilhado"
+# Outbox subject that triggers rendering and sending a personalized PDF proposal.
+PROPOSAL_PDF_SUBJECT = "proposta pdf"
 
 # Words a contact is saved under that aren't a name ("RENAN AMOR", "Mãe").
 _NOT_A_NAME = {
